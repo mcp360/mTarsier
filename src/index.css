@@ -1,0 +1,100 @@
+@import "tailwindcss";
+
+/*
+  Tailwind v4 @theme registers token names for utility classes.
+  Actual values are set via inline styles on <html> by themeStore.
+  The defaults here match the "tarsier" theme so the initial paint is correct.
+*/
+@theme {
+  --color-base: #080c0a;
+  --color-base-light: #0f1612;
+  --color-base-lighter: #1a2420;
+  --color-primary: #00ff88;
+  --color-primary-dim: #00cc6a;
+  --color-cyan: #00d4ff;
+  --color-amber: #ffb800;
+  --color-purple: #a78bfa;
+  --color-surface: #111916;
+  --color-surface-hover: #162019;
+  --color-surface-overlay: #1a2420;
+  --color-border: #243d33;
+  --color-border-hover: #3d5c4e;
+  --color-text: #e0ece6;
+  --color-text-muted: #7a9488;
+  --font-sans: "Bricolage Grotesque", sans-serif;
+  --font-mono: "Geist Mono", monospace;
+}
+
+/*
+  All base/reset rules go inside @layer base so that @layer utilities
+  (Tailwind spacing, padding, etc.) always wins in the cascade.
+*/
+@layer base {
+  * {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+  }
+
+  body {
+    font-family: var(--font-sans);
+    background-color: var(--color-base);
+    color: var(--color-text);
+    overflow: hidden;
+  }
+
+  /* shadcn bridge variables — keeps any shadcn components theme-aware */
+  :root {
+    --background: var(--color-base);
+    --foreground: var(--color-text);
+    --card: var(--color-surface);
+    --card-foreground: var(--color-text);
+    --muted: var(--color-surface-hover);
+    --muted-foreground: var(--color-text-muted);
+    --border: var(--color-border);
+    --input: var(--color-surface);
+    --ring: var(--color-primary);
+    --radius: 0.5rem;
+  }
+}
+
+::-webkit-scrollbar {
+  width: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--color-border);
+  border-radius: 3px;
+}
+
+@keyframes eye-glow {
+  0%,
+  100% {
+    filter: drop-shadow(0 0 4px color-mix(in srgb, var(--color-primary) 33%, transparent));
+  }
+  50% {
+    filter: drop-shadow(0 0 10px color-mix(in srgb, var(--color-primary) 60%, transparent));
+  }
+}
+
+.tarsier-eye-glow {
+  animation: eye-glow 3s ease-in-out infinite;
+}
+
+@keyframes pulse-dot {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.4;
+  }
+}
+
+@utility animate-pulse-dot {
+  animation: pulse-dot 2s ease-in-out infinite;
+}

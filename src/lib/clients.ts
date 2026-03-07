@@ -1,0 +1,199 @@
+import type { ClientMeta, ClientType } from "../types/client";
+
+export const CLIENT_REGISTRY: ClientMeta[] = [
+  // ── Anthropic ────────────────────────────────────────────────────────────
+  {
+    id: "claude-desktop",
+    name: "Claude Desktop",
+    type: "Desktop",
+    docsUrl: "https://modelcontextprotocol.io/quickstart/user",
+    configPath: "~/Library/Application Support/Claude/claude_desktop_config.json",
+    configPathWin: "%APPDATA%\\Claude\\claude_desktop_config.json",
+    configPathLinux: "~/.config/Claude/claude_desktop_config.json",
+    configKey: "mcpServers",
+    configFormat: "json",
+    detection: { kind: "app_bundle", path: "/Applications/Claude.app" },
+    supportedTransports: ["stdio", "remote-mcp"],
+  },
+  {
+    id: "claude-code",
+    name: "Claude Code",
+    type: "CLI",
+    docsUrl: "https://docs.anthropic.com/en/docs/agents-and-tools/claude-code/tutorials#set-up-model-context-protocol-mcp",
+    configPath: "~/.claude.json",
+    configPathWin: "%USERPROFILE%\\.claude.json",
+    configPathLinux: "~/.claude.json",
+    configKey: "projects.{HOME}.mcpServers",
+    configFormat: "json",
+    isSharedFile: true,
+    supportsScopes: true,
+    detection: { kind: "cli_binary", name: "claude" },
+    supportedTransports: ["stdio", "sse", "streamable-http"],
+  },
+  {
+    id: "claude-web",
+    name: "Claude (web)",
+    type: "Web",
+    docsUrl: "https://support.claude.com/en/articles/11503834-building-custom-connectors-via-remote-mcp-servers",
+    configPath: null,
+    configPathWin: null,
+    configPathLinux: null,
+    configKey: "",
+    configFormat: "json",
+    detection: { kind: "none" },
+    supportedTransports: ["sse", "streamable-http"],
+    setupSteps: [
+      { text: "Open claude.ai and sign in to your account." },
+      { text: "Click your profile icon → Settings → Connectors." },
+      { text: 'Click "Add custom connector".' },
+      {
+        text: "Paste your remote MCP server URL (must be HTTPS). Supports SSE and Streamable HTTP.",
+      },
+      { text: "Complete OAuth authorization if your server requires it." },
+      {
+        text: "The connector will now appear in every conversation.",
+        note: "Requires Pro, Max, Team, or Enterprise plan.",
+      },
+    ],
+  },
+
+  // ── OpenAI ───────────────────────────────────────────────────────────────
+  {
+    id: "chatgpt-desktop",
+    name: "ChatGPT Desktop",
+    type: "Desktop",
+    docsUrl: "https://help.openai.com/en/articles/12584461-developer-mode-apps-and-full-mcp-connectors-in-chatgpt-beta",
+    // MCP for the desktop app is managed through chatgpt.com developer mode —
+    // there is no local config file.
+    configPath: null,
+    configPathWin: null,
+    configPathLinux: null,
+    configKey: "",
+    configFormat: "json",
+    detection: { kind: "app_bundle", path: "/Applications/ChatGPT.app" },
+    supportedTransports: ["sse", "streamable-http"],
+    setupSteps: [
+      {
+        text: "MCP for ChatGPT is managed through the web, not a local file.",
+        note: "Open chatgpt.com to configure MCP servers.",
+      },
+      { text: "Sign in at chatgpt.com → click your avatar → Settings → Apps." },
+      { text: "Scroll to Advanced settings and enable Developer mode (beta)." },
+      {
+        text: 'Click "Add app" and paste your remote MCP server URL.',
+        note: "Supports Streamable HTTP and SSE transports. The desktop app picks up the same connectors automatically.",
+      },
+    ],
+  },
+  {
+    id: "codex-app",
+    name: "Codex",
+    type: "Desktop",
+    docsUrl: "https://developers.openai.com/codex/mcp",
+    configPath: "~/.codex/config.toml",
+    configPathWin: "%USERPROFILE%\\.codex\\config.toml",
+    configPathLinux: "~/.codex/config.toml",
+    configKey: "mcp_servers",
+    configFormat: "toml",
+    isSharedFile: true,
+    detection: { kind: "app_bundle", path: "/Applications/Codex.app" },
+    supportedTransports: ["stdio", "remote-mcp"],
+  },
+  {
+    id: "chatgpt",
+    name: "ChatGPT",
+    type: "Web",
+    docsUrl: "https://developers.openai.com/api/docs/guides/tools-connectors-mcp/",
+    configPath: null,
+    configPathWin: null,
+    configPathLinux: null,
+    configKey: "",
+    configFormat: "json",
+    detection: { kind: "none" },
+    supportedTransports: ["sse", "streamable-http"],
+    setupSteps: [
+      { text: "Open chatgpt.com and sign in." },
+      { text: "Click your avatar → Settings → Apps." },
+      { text: "Scroll to Advanced settings and enable Developer mode (beta)." },
+      {
+        text: 'Click "Add app" and paste your remote MCP server URL.',
+        note: "Supports Streamable HTTP and SSE transports only.",
+      },
+      { text: "Authorize via OAuth if your server requires it." },
+    ],
+  },
+  {
+    id: "codex-cli",
+    name: "Codex CLI",
+    type: "CLI",
+    docsUrl: "https://developers.openai.com/codex/mcp",
+    configPath: "~/.codex/config.toml",
+    configPathWin: "%USERPROFILE%\\.codex\\config.toml",
+    configPathLinux: "~/.codex/config.toml",
+    configKey: "mcp_servers",
+    configFormat: "toml",
+    isSharedFile: true,
+    detection: { kind: "cli_binary", name: "codex" },
+    supportedTransports: ["stdio", "remote-mcp"],
+  },
+
+  // ── Google ───────────────────────────────────────────────────────────────
+  {
+    id: "gemini-cli",
+    name: "Gemini CLI",
+    type: "CLI",
+    docsUrl: "https://google-gemini.github.io/gemini-cli/docs/tools/mcp-server.html",
+    configPath: "~/.gemini/settings.json",
+    configPathWin: "%USERPROFILE%\\.gemini\\settings.json",
+    configPathLinux: "~/.gemini/settings.json",
+    configKey: "mcpServers",
+    configFormat: "json",
+    isSharedFile: true,
+    detection: { kind: "cli_binary", name: "gemini" },
+    supportedTransports: ["stdio", "sse", "streamable-http"],
+  },
+
+  // ── IDEs ─────────────────────────────────────────────────────────────────
+  {
+    id: "cursor",
+    name: "Cursor",
+    type: "IDE",
+    docsUrl: "https://docs.cursor.com/context/model-context-protocol",
+    configPath: "~/.cursor/mcp.json",
+    configPathWin: "%USERPROFILE%\\.cursor\\mcp.json",
+    configPathLinux: "~/.cursor/mcp.json",
+    configKey: "mcpServers",
+    configFormat: "json",
+    detection: { kind: "app_bundle", path: "/Applications/Cursor.app" },
+    supportedTransports: ["stdio", "sse", "streamable-http"],
+  },
+  {
+    id: "windsurf",
+    name: "Windsurf",
+    type: "IDE",
+    docsUrl: "https://docs.codeium.com/windsurf/mcp",
+    configPath: "~/.codeium/windsurf/mcp_config.json",
+    configPathWin: "%USERPROFILE%\\.codeium\\windsurf\\mcp_config.json",
+    configPathLinux: "~/.codeium/windsurf/mcp_config.json",
+    configKey: "mcpServers",
+    configFormat: "json",
+    detection: { kind: "app_bundle", path: "/Applications/Windsurf.app" },
+    supportedTransports: ["stdio", "sse", "streamable-http"],
+  },
+];
+
+export function getClientById(id: string): ClientMeta | undefined {
+  return CLIENT_REGISTRY.find((c) => c.id === id);
+}
+
+export function getClientsByType(type: ClientType): ClientMeta[] {
+  return CLIENT_REGISTRY.filter((c) => c.type === type);
+}
+
+export function getLocalClients(): ClientMeta[] {
+  return CLIENT_REGISTRY.filter((c) => c.detection.kind !== "none");
+}
+
+export function getConfigurableClients(): ClientMeta[] {
+  return CLIENT_REGISTRY.filter((c) => c.configPath !== null);
+}
