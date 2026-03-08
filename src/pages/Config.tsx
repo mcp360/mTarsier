@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { useSearchParams } from "react-router-dom";
 import { useConfigStore } from "../store/configStore";
 import ConfigClientSelector from "../components/config/ConfigClientSelector";
@@ -22,12 +22,15 @@ function Config() {
     createDefaultConfig,
   } = useConfigStore();
 
+  const appliedParam = useRef(false);
   useEffect(() => {
+    if (appliedParam.current) return;
     const clientParam = searchParams.get("client");
-    if (clientParam && clientParam !== selectedClientId) {
+    if (clientParam) {
       setSelectedClient(clientParam);
+      appliedParam.current = true;
     }
-  }, [searchParams, selectedClientId, setSelectedClient]);
+  }, [searchParams, setSelectedClient]);
 
   return (
     <div className="flex h-full">

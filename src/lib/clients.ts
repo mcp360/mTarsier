@@ -155,6 +155,32 @@ export const CLIENT_REGISTRY: ClientMeta[] = [
 
   // ── IDEs ─────────────────────────────────────────────────────────────────
   {
+    id: "github-copilot",
+    name: "GitHub Copilot",
+    type: "IDE",
+    docsUrl: "https://code.visualstudio.com/docs/copilot/customization/mcp-servers",
+    configPath: "~/Library/Application Support/Code/User/mcp.json",
+    configPathWin: "%APPDATA%\\Code\\User\\mcp.json",
+    configPathLinux: "~/.config/Code/User/mcp.json",
+    configKey: "servers",
+    configFormat: "json",
+    detection: { kind: "vscode_extension", id: "github.copilot-chat" },
+    supportedTransports: ["stdio", "sse", "streamable-http"],
+  },
+  {
+    id: "github-copilot-cli",
+    name: "GitHub Copilot CLI",
+    type: "CLI",
+    docsUrl: "https://docs.github.com/en/copilot/how-tos/copilot-cli/customize-copilot/add-mcp-servers",
+    configPath: "~/.copilot/mcp-config.json",
+    configPathWin: "%USERPROFILE%\\.copilot\\mcp-config.json",
+    configPathLinux: "~/.copilot/mcp-config.json",
+    configKey: "mcpServers",
+    configFormat: "json",
+    detection: { kind: "cli_binary", name: "copilot" },
+    supportedTransports: ["stdio", "sse", "streamable-http"],
+  },
+  {
     id: "cursor",
     name: "Cursor",
     type: "IDE",

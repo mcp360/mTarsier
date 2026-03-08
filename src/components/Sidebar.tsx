@@ -54,8 +54,11 @@ function Sidebar() {
       </div>
 
       <nav className="flex flex-1 flex-col gap-4 overflow-y-auto px-3 py-4">
-        <NavSection label="Main" items={mainNav} />
-        <NavSection label="Tools" items={toolsNav} />
+        <div className="space-y-0.5">
+          {[...mainNav, ...toolsNav].map((item) => (
+            <NavItem key={item.to} to={item.to} label={item.label} icon={item.icon} />
+          ))}
+        </div>
         <div className="flex-1" />
         <div className="space-y-0.5">
           {bottomNav.map((item) => (

@@ -85,27 +85,6 @@ function Settings() {
         </div>
       </section>
 
-      <section>
-        <h2 className="text-sm font-semibold uppercase tracking-wider text-text-muted mb-4">
-          General
-        </h2>
-        <div className="max-w-2xl space-y-3">
-          <div className="flex items-center justify-between rounded-lg border border-border bg-surface p-4">
-            <div>
-              <p className="text-sm font-medium">Auto-detect clients on launch</p>
-              <p className="text-xs text-text-muted mt-0.5">Scan for installed MCP clients when the app starts</p>
-            </div>
-            <span className="rounded bg-surface-hover px-2 py-0.5 text-[10px] text-text-muted">Coming soon</span>
-          </div>
-          <div className="flex items-center justify-between rounded-lg border border-border bg-surface p-4">
-            <div>
-              <p className="text-sm font-medium">Backup frequency</p>
-              <p className="text-xs text-text-muted mt-0.5">Automatically back up configs at a set interval</p>
-            </div>
-            <span className="rounded bg-surface-hover px-2 py-0.5 text-[10px] text-text-muted">Coming soon</span>
-          </div>
-        </div>
-      </section>
       </div>
     </div>
   );

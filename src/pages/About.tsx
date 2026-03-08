@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { getVersion } from "@tauri-apps/api/app";
 import { open } from "@tauri-apps/plugin-shell";
 import mtarsierLogo from "../assets/mtarsier-logo.png";
+import { trackUrl } from "../lib/utils";
 
 function About() {
   const [version, setVersion] = useState("");
@@ -11,7 +12,7 @@ function About() {
   }, []);
 
   const openLink = (url: string) => {
-    open(url);
+    open(trackUrl(url));
   };
 
   return (
@@ -34,26 +35,17 @@ function About() {
           </p>
         </div>
 
-        {/* Organization */}
-        <div className="rounded-lg border border-border bg-surface p-4 space-y-2 text-sm text-center">
-          <p className="text-text-muted">
-            Built by <span className="text-text font-medium">Delta4 Infotech</span>, Mohali, India
-          </p>
-          <p className="text-text-muted">
-            Powered by{" "}
-            <button
-              onClick={() => openLink("https://mcp360.ai")}
-              className="text-primary font-medium hover:underline cursor-pointer"
-            >
-              MCP360
-            </button>
-          </p>
-        </div>
-
         {/* Links */}
         <div className="flex items-center justify-center gap-4 text-sm">
           <button
-            onClick={() => openLink("https://github.com/mtarsier/mtarsier")}
+            onClick={() => openLink("https://mcp360.ai/mTarsier")}
+            className="text-text-muted hover:text-primary cursor-pointer transition-colors"
+          >
+            Website
+          </button>
+          <span className="text-border">|</span>
+          <button
+            onClick={() => openLink("https://github.com/mcp360/mtarsier")}
             className="text-text-muted hover:text-primary cursor-pointer transition-colors"
           >
             GitHub

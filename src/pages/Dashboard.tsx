@@ -5,7 +5,7 @@ import { useAuditStore } from "../store/auditStore";
 import { useClientDetection } from "../hooks/useClientDetection";
 import type { ClientType } from "../types/client";
 
-const CLIENT_TYPES: ClientType[] = ["Desktop", "IDE", "CLI", "Web", "Framework"];
+const CLIENT_TYPES: ClientType[] = ["Desktop", "IDE", "CLI"];
 
 const TYPE_COLORS: Record<ClientType, { badge: string; dot: string }> = {
   Desktop: { badge: "bg-surface-overlay text-text-muted", dot: "bg-text-muted/50" },
@@ -83,7 +83,7 @@ function Dashboard() {
 
   const clientsByType = useMemo(() => {
     const map: Record<ClientType, typeof clients> = {
-      Desktop: [], IDE: [], CLI: [], Web: [], Framework: [],
+      Desktop: [], IDE: [], CLI: [], Web: [], Framework: [], // Web/Framework kept in map but not rendered
     };
     for (const c of clients) map[c.meta.type].push(c);
     return map;
@@ -113,7 +113,7 @@ function Dashboard() {
         {/* Client Breakdown by Type */}
         <div>
           <h2 className="mb-3 text-sm font-semibold text-text-muted">Clients by Type</h2>
-          <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
+          <div className="grid grid-cols-3 gap-3">
             {CLIENT_TYPES.map((type) => {
               const all = clientsByType[type];
               const installed = all.filter((c) => c.installed);
