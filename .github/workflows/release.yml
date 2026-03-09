@@ -74,13 +74,25 @@ jobs:
           security set-key-partition-list -S apple-tool:,apple: -k "$KEYCHAIN_PASSWORD" $KEYCHAIN_PATH
           security list-keychain -d user -s $KEYCHAIN_PATH
 
-      # ── Prepare tsr sidecar ────────────────────────────────────────────────
-      - name: Prepare tsr sidecar (macOS)
+      # ── Prepare tsr sidecar placeholder ───────────────────────────────────
+      # Tauri's build.rs checks the sidecar exists before compilation.
+      # We create a placeholder here; beforeBundleCommand builds the real binary.
+
+      - name: Create tsr placeholder (macOS)
         if: matrix.platform == 'macos-latest'
         working-directory: src-tauri
-        run: bash scripts/prepare-sidecar.sh release
+        run: |
+          ARGS="${{ matrix.args }}"
+          if [[ "$ARGS" == *"--target"* ]]; then
+            TRIPLE=$(echo "$ARGS" | sed 's/--target //' | tr -d ' ')
+          else
+            TRIPLE=$(rustc -vV | sed -n 's/host: //p')
+          fi
+          mkdir -p binaries
+          touch "binaries/tsr-$TRIPLE"
+          echo "Placeholder: binaries/tsr-$TRIPLE"
 
-      - name: Prepare tsr sidecar (Windows)
+      - name: Create tsr placeholder + fix icon (Windows)
         if: matrix.platform == 'windows-latest'
         working-directory: src-tauri
         shell: pwsh
@@ -88,13 +100,19 @@ jobs:
           $triple = (rustc -vV | Select-String "host:").ToString().Split(" ")[1].Trim()
           New-Item -ItemType Directory -Force -Path binaries | Out-Null
           New-Item -ItemType File -Force -Path "binaries/tsr-$triple.exe" | Out-Null
-          cargo build --release --bin tsr
-          Copy-Item "target/release/tsr.exe" "binaries/tsr-$triple.exe"
+          Write-Host "Placeholder: binaries/tsr-$triple.exe"
+          # Regenerate icon.ico in proper Windows 3.00 format
+          magick convert icons/128x128@2x.png -define icon:auto-resize=256,128,64,48,32,16 icons/icon.ico
+          Write-Host "Regenerated icon.ico"
 
-      - name: Prepare tsr sidecar (Linux)
+      - name: Create tsr placeholder (Linux)
         if: matrix.platform == 'ubuntu-22.04'
         working-directory: src-tauri
-        run: bash scripts/prepare-sidecar.sh release
+        run: |
+          TRIPLE=$(rustc -vV | sed -n 's/host: //p')
+          mkdir -p binaries
+          touch "binaries/tsr-$TRIPLE"
+          echo "Placeholder: binaries/tsr-$TRIPLE"
 
       # ── Build ──────────────────────────────────────────────────────────────
       - name: Build and release
