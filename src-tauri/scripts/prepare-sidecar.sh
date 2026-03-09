@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
-# Builds the tsr binary and copies it to binaries/tsr-{triple}.
-# Run once before `pnpm tauri dev`, and automatically via beforeBundleCommand.
+# Builds the tsr binary and copies it to binaries/tsr-{triple}[.exe].
+#
+# When called by Tauri's beforeBundleCommand, TAURI_ENV_TARGET_TRIPLE is set
+# automatically for cross-compilation targets. Falls back to host triple otherwise.
 #
 # Usage:
 #   bash scripts/prepare-sidecar.sh          # debug (default)
@@ -8,24 +10,41 @@
 
 set -e
 
-TRIPLE=$(rustc -vV | sed -n 's/host: //p')
+HOST_TRIPLE=$(rustc -vV | sed -n 's/host: //p')
+TRIPLE="${TAURI_ENV_TARGET_TRIPLE:-$HOST_TRIPLE}"
 PROFILE="${1:-debug}"
+
+# Windows binaries have .exe extension
+if [[ "$TRIPLE" == *"windows"* ]]; then
+  EXT=".exe"
+else
+  EXT=""
+fi
 
 mkdir -p binaries
 
-# Tauri's build.rs validates that the sidecar file exists before compiling.
-# Touch a placeholder so the check passes, then overwrite with the real binary.
-touch "binaries/tsr-$TRIPLE"
+# Touch placeholder so Tauri's build.rs validation passes before compilation
+touch "binaries/tsr-$TRIPLE$EXT"
 
 echo "Building tsr ($PROFILE) for $TRIPLE..."
 
-if [ "$PROFILE" = "release" ]; then
-  cargo build --release --bin tsr
-  cp "target/release/tsr" "binaries/tsr-$TRIPLE"
+# Use --target flag when cross-compiling
+if [ "$TRIPLE" != "$HOST_TRIPLE" ]; then
+  TARGET_FLAG="--target $TRIPLE"
 else
-  cargo build --bin tsr
-  cp "target/debug/tsr" "binaries/tsr-$TRIPLE"
+  TARGET_FLAG=""
 fi
 
-chmod +x "binaries/tsr-$TRIPLE"
-echo "✓  binaries/tsr-$TRIPLE ready"
+if [ "$PROFILE" = "release" ]; then
+  cargo build --release --bin tsr $TARGET_FLAG
+  SRC="target/${TRIPLE}/release/tsr${EXT}"
+  [ -f "$SRC" ] || SRC="target/release/tsr${EXT}"
+else
+  cargo build --bin tsr $TARGET_FLAG
+  SRC="target/${TRIPLE}/debug/tsr${EXT}"
+  [ -f "$SRC" ] || SRC="target/debug/tsr${EXT}"
+fi
+
+cp "$SRC" "binaries/tsr-$TRIPLE$EXT"
+chmod +x "binaries/tsr-$TRIPLE$EXT" 2>/dev/null || true
+echo "✓  binaries/tsr-$TRIPLE$EXT ready"
