@@ -1,4 +1,6 @@
-mod commands;
+pub mod commands;
+pub mod marketplace;
+pub mod registry;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {

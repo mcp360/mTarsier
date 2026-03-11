@@ -1,4 +1,11 @@
 use clap::{Parser, Subcommand};
+use std::collections::HashMap;
+use std::process;
+
+use app_lib::commands::clients::{detect_installed_clients, read_mcp_servers, DetectionRequest};
+use app_lib::commands::utils::{ensure_json_path, expand_config_key, expand_tilde};
+use app_lib::marketplace::{find_server, MARKETPLACE};
+use app_lib::registry::{find_client, platform_config_path, REGISTRY};
 
 #[derive(Parser)]
 #[command(
@@ -13,70 +20,829 @@ struct Cli {
 
 #[derive(Subcommand)]
 enum Commands {
-    /// List all MCP servers across configured clients
-    List,
-
-    /// Add a new MCP server
+    /// List all MCP clients
+    Clients {
+        #[arg(long)]
+        json: bool,
+    },
+    /// List MCP servers across all clients (or one)
+    List {
+        #[arg(long)]
+        client: Option<String>,
+        #[arg(long)]
+        json: bool,
+    },
+    /// Add a server to a client's config
     Add {
-        /// Server name
         name: String,
-        /// Server URL or command
-        url: String,
+        #[arg(long)]
+        client: String,
+        #[arg(long)]
+        command: Option<String>,
+        #[arg(long, num_args = 0.., allow_hyphen_values = true)]
+        args: Vec<String>,
+        #[arg(long)]
+        url: Option<String>,
     },
-
-    /// Ping an MCP server
+    /// Remove a server from a client's config
+    Remove {
+        name: String,
+        #[arg(long)]
+        client: String,
+    },
+    /// Ping a server to check connectivity
     Ping {
-        /// Server name
         name: String,
+        #[arg(long)]
+        client: Option<String>,
     },
-
-    /// List detected MCP clients
-    Clients,
-
-    /// Show or edit the config for a client
+    /// Show or edit a client's config file
     Config {
-        /// Client ID (e.g. claude-desktop, cursor)
         client_id: String,
-        /// Open config in $EDITOR
         #[arg(long)]
         edit: bool,
+        #[arg(long)]
+        show: bool,
     },
-
-    /// Install an MCP from the marketplace
+    /// Install a server from the marketplace
     Install {
-        /// MCP name from the marketplace
         name: String,
+        #[arg(long)]
+        client: String,
+        #[arg(long = "param", num_args = 1)]
+        params: Vec<String>,
     },
 }
 
 fn main() {
     let cli = Cli::parse();
-
     match cli.command {
-        None => {
-            println!("mTarsier CLI — use --help to see available commands");
-        }
-        Some(Commands::List) => {
-            eprintln!("tsr list: not yet implemented");
-        }
-        Some(Commands::Add { name, url }) => {
-            eprintln!("tsr add {name} {url}: not yet implemented");
-        }
-        Some(Commands::Ping { name }) => {
-            eprintln!("tsr ping {name}: not yet implemented");
-        }
-        Some(Commands::Clients) => {
-            eprintln!("tsr clients: not yet implemented");
-        }
-        Some(Commands::Config { client_id, edit }) => {
-            if edit {
-                eprintln!("tsr config {client_id} --edit: not yet implemented");
-            } else {
-                eprintln!("tsr config {client_id}: not yet implemented");
+        None => println!("mTarsier CLI — use --help to see available commands"),
+        Some(Commands::Clients { json }) => cmd_clients(json),
+        Some(Commands::List { client, json }) => cmd_list(client, json),
+        Some(Commands::Add {
+            name,
+            client,
+            command,
+            args,
+            url,
+        }) => cmd_add(name, client, command, args, url),
+        Some(Commands::Remove { name, client }) => cmd_remove(name, client),
+        Some(Commands::Ping { name, client }) => cmd_ping(name, client),
+        Some(Commands::Config {
+            client_id,
+            edit,
+            show,
+        }) => cmd_config(client_id, edit, show),
+        Some(Commands::Install {
+            name,
+            client,
+            params,
+        }) => cmd_install(name, client, params),
+    }
+}
+
+// ─── Command implementations ──────────────────────────────────────────────────
+
+fn cmd_clients(json: bool) {
+    let requests: Vec<DetectionRequest> = REGISTRY
+        .iter()
+        .map(|c| DetectionRequest {
+            client_id: c.id.to_string(),
+            detection_kind: c.detection_kind.to_string(),
+            detection_value: c.detection_value.map(String::from),
+            config_path: platform_config_path(c).map(String::from),
+            config_key: Some(c.config_key.to_string()),
+        })
+        .collect();
+
+    let results = detect_installed_clients(requests);
+
+    if json {
+        let json_arr: Vec<serde_json::Value> = results
+            .iter()
+            .filter_map(|r| {
+                let client = find_client(&r.client_id)?;
+                Some(serde_json::json!({
+                    "id": r.client_id,
+                    "name": client.name,
+                    "type": client.client_type,
+                    "installed": r.installed,
+                    "server_count": r.server_count,
+                    "config_path": platform_config_path(client),
+                }))
+            })
+            .collect();
+        match serde_json::to_string_pretty(&json_arr) {
+            Ok(s) => println!("{}", s),
+            Err(e) => {
+                eprintln!("Error serializing JSON: {}", e);
+                process::exit(1);
             }
         }
-        Some(Commands::Install { name }) => {
-            eprintln!("tsr install {name}: not yet implemented");
+        return;
+    }
+
+    println!(
+        "{:<24} {:<9} {:>4}  {}",
+        "Client", "Type", "Srvs", "Config Path"
+    );
+    println!("{}", "─".repeat(80));
+    for r in &results {
+        let client = match find_client(&r.client_id) {
+            Some(c) => c,
+            None => continue,
+        };
+        let mark = if r.installed { "✓" } else { "✗" };
+        let srv = r
+            .server_count
+            .map(|n| n.to_string())
+            .unwrap_or_else(|| "—".to_string());
+        let path = platform_config_path(client).unwrap_or("(no local config)");
+        println!(
+            "{} {:<22} {:<9} {:>4}  {}",
+            mark, client.name, client.client_type, srv, path
+        );
+    }
+}
+
+fn cmd_list(client: Option<String>, json: bool) {
+    if let Some(ref id) = client {
+        if find_client(id).is_none() {
+            eprintln!("Unknown client: {}", id);
+            eprintln!(
+                "Available: {}",
+                REGISTRY.iter().map(|c| c.id).collect::<Vec<_>>().join(", ")
+            );
+            process::exit(1);
+        }
+    }
+
+    let clients_to_check: Vec<_> = if let Some(ref id) = client {
+        REGISTRY.iter().filter(|c| c.id == id.as_str()).collect()
+    } else {
+        REGISTRY.iter().collect()
+    };
+
+    let mut output: Vec<serde_json::Value> = Vec::new();
+
+    for c in clients_to_check {
+        let Some(path) = platform_config_path(c) else {
+            continue;
+        };
+        if c.config_key.is_empty() {
+            continue;
+        }
+        let abs_path = expand_tilde(path);
+        if !abs_path.exists() {
+            continue;
+        }
+
+        let servers = match read_mcp_servers(
+            path.to_string(),
+            c.config_key.to_string(),
+            Some(c.config_format.to_string()),
+        ) {
+            Ok(s) => s,
+            Err(_) => continue,
+        };
+
+        let servers_json: Vec<serde_json::Value> = servers
+            .iter()
+            .map(|s| {
+                serde_json::json!({
+                    "name": s.name,
+                    "command": s.command,
+                    "args": s.args,
+                    "url": s.url,
+                })
+            })
+            .collect();
+
+        output.push(serde_json::json!({
+            "client": c.name,
+            "client_id": c.id,
+            "servers": servers_json,
+        }));
+    }
+
+    if json {
+        match serde_json::to_string_pretty(&output) {
+            Ok(s) => println!("{}", s),
+            Err(e) => {
+                eprintln!("Error serializing JSON: {}", e);
+                process::exit(1);
+            }
+        }
+        return;
+    }
+
+    if output.is_empty() {
+        println!("No MCP servers found.");
+        return;
+    }
+
+    for client_data in &output {
+        let client_name = client_data["client"].as_str().unwrap_or("");
+        let servers = client_data["servers"].as_array().map(Vec::as_slice).unwrap_or(&[]);
+        println!("\n── {} ──", client_name);
+        if servers.is_empty() {
+            println!("  (none)");
+        } else {
+            println!("  {:<30} {}", "Name", "Command / URL");
+            println!("  {}", "─".repeat(60));
+            for s in servers {
+                let name = s["name"].as_str().unwrap_or("?");
+                let cmd_str = if let Some(url) = s["url"].as_str() {
+                    format!("url: {}", url)
+                } else {
+                    let cmd = s["command"].as_str().unwrap_or("?");
+                    let args_str = s["args"]
+                        .as_array()
+                        .map(|arr| {
+                            arr.iter()
+                                .filter_map(|v| v.as_str())
+                                .collect::<Vec<_>>()
+                                .join(" ")
+                        })
+                        .unwrap_or_default();
+                    format!("{} {}", cmd, args_str)
+                };
+                println!("  {:<30} {}", name, cmd_str);
+            }
+        }
+    }
+}
+
+fn cmd_config(client_id: String, edit: bool, show: bool) {
+    let client = match find_client(&client_id) {
+        Some(c) => c,
+        None => {
+            eprintln!("Unknown client: {}", client_id);
+            eprintln!(
+                "Available: {}",
+                REGISTRY.iter().map(|c| c.id).collect::<Vec<_>>().join(", ")
+            );
+            process::exit(1);
+        }
+    };
+
+    let path = match platform_config_path(client) {
+        Some(p) => p,
+        None => {
+            eprintln!("Client '{}' has no local config file.", client_id);
+            process::exit(1);
+        }
+    };
+
+    if show {
+        match std::fs::read_to_string(expand_tilde(path)) {
+            Ok(content) => print!("{}", content),
+            Err(e) => {
+                eprintln!("Error reading config: {}", e);
+                process::exit(1);
+            }
+        }
+        return;
+    }
+
+    if edit {
+        let editor = std::env::var("EDITOR").unwrap_or_else(|_| "nano".to_string());
+        let abs_path = expand_tilde(path);
+        match std::process::Command::new(&editor).arg(&abs_path).status() {
+            Ok(_) => {}
+            Err(e) => {
+                eprintln!("Error opening editor '{}': {}", editor, e);
+                process::exit(1);
+            }
+        }
+        return;
+    }
+
+    println!("{}", expand_tilde(path).display());
+}
+
+fn cmd_add(
+    name: String,
+    client: String,
+    command: Option<String>,
+    args: Vec<String>,
+    url: Option<String>,
+) {
+    if command.is_none() && url.is_none() {
+        eprintln!("Error: must provide --command and/or --url");
+        process::exit(1);
+    }
+
+    let client_def = match find_client(&client) {
+        Some(c) => c,
+        None => {
+            eprintln!("Unknown client: {}", client);
+            process::exit(1);
+        }
+    };
+
+    let path = match platform_config_path(client_def) {
+        Some(p) => p,
+        None => {
+            eprintln!("Client '{}' has no local config file.", client);
+            process::exit(1);
+        }
+    };
+
+    let mut entry = serde_json::json!({});
+    if let Some(ref cmd) = command {
+        entry["command"] = serde_json::json!(cmd);
+    }
+    if !args.is_empty() {
+        entry["args"] = serde_json::json!(args);
+    }
+    if let Some(ref u) = url {
+        entry["url"] = serde_json::json!(u);
+    }
+
+    match insert_server(
+        path,
+        client_def.config_key,
+        client_def.config_format,
+        &name,
+        entry,
+    ) {
+        Ok(_) => println!("✓ Added {} to {}", name, client_def.name),
+        Err(e) => {
+            eprintln!("Error: {}", e);
+            process::exit(1);
+        }
+    }
+}
+
+fn cmd_remove(name: String, client: String) {
+    let client_def = match find_client(&client) {
+        Some(c) => c,
+        None => {
+            eprintln!("Unknown client: {}", client);
+            process::exit(1);
+        }
+    };
+
+    let path = match platform_config_path(client_def) {
+        Some(p) => p,
+        None => {
+            eprintln!("Client '{}' has no local config file.", client);
+            process::exit(1);
+        }
+    };
+
+    match remove_server(
+        path,
+        client_def.config_key,
+        client_def.config_format,
+        &name,
+    ) {
+        Ok(true) => println!("✓ Removed {} from {}", name, client_def.name),
+        Ok(false) => {
+            eprintln!("Server '{}' not found in {}", name, client_def.name);
+            process::exit(1);
+        }
+        Err(e) => {
+            eprintln!("Error: {}", e);
+            process::exit(1);
+        }
+    }
+}
+
+fn cmd_ping(name: String, client: Option<String>) {
+    if let Some(ref id) = client {
+        if find_client(id).is_none() {
+            eprintln!("Unknown client: {}", id);
+            process::exit(1);
+        }
+    }
+
+    let clients_to_check: Vec<_> = if let Some(ref id) = client {
+        REGISTRY.iter().filter(|c| c.id == id.as_str()).collect()
+    } else {
+        REGISTRY.iter().collect()
+    };
+
+    for c in clients_to_check {
+        let Some(path) = platform_config_path(c) else {
+            continue;
+        };
+        if c.config_key.is_empty() {
+            continue;
+        }
+        let abs_path = expand_tilde(path);
+        if !abs_path.exists() {
+            continue;
+        }
+
+        let servers = match read_mcp_servers(
+            path.to_string(),
+            c.config_key.to_string(),
+            Some(c.config_format.to_string()),
+        ) {
+            Ok(s) => s,
+            Err(_) => continue,
+        };
+
+        if let Some(server) = servers.iter().find(|s| s.name == name) {
+            if let Some(ref url) = server.url {
+                ping_url(&name, url);
+            } else if let Some(ref cmd) = server.command {
+                ping_command(&name, cmd);
+            } else {
+                eprintln!("Server '{}' has no command or URL to ping", name);
+                process::exit(1);
+            }
+            return;
+        }
+    }
+
+    eprintln!("Server '{}' not found", name);
+    process::exit(1);
+}
+
+fn cmd_install(name: String, client: String, params: Vec<String>) {
+    let server_def = match find_server(&name) {
+        Some(s) => s,
+        None => {
+            eprintln!("Server '{}' not found in marketplace.", name);
+            eprintln!("Available servers:");
+            for s in MARKETPLACE {
+                eprintln!("  {} ({})", s.id, s.name);
+            }
+            process::exit(1);
+        }
+    };
+
+    let client_def = match find_client(&client) {
+        Some(c) => c,
+        None => {
+            eprintln!("Unknown client: {}", client);
+            process::exit(1);
+        }
+    };
+
+    let path = match platform_config_path(client_def) {
+        Some(p) => p,
+        None => {
+            eprintln!("Client '{}' has no local config file.", client);
+            process::exit(1);
+        }
+    };
+
+    // Parse --param KEY=VALUE pairs
+    let mut param_map: HashMap<String, String> = HashMap::new();
+    for p in &params {
+        if let Some((key, val)) = p.split_once('=') {
+            param_map.insert(key.to_string(), val.to_string());
+        } else {
+            eprintln!("Invalid param format '{}'. Expected KEY=VALUE", p);
+            process::exit(1);
+        }
+    }
+
+    // Check all required params are present
+    let mut missing: Vec<&str> = Vec::new();
+    for key in server_def.env_keys {
+        if !param_map.contains_key(*key) {
+            missing.push(key);
+        }
+    }
+    for key in server_def.arg_params {
+        if !param_map.contains_key(*key) {
+            missing.push(key);
+        }
+    }
+    if !missing.is_empty() {
+        eprintln!("Missing required parameters: {}", missing.join(", "));
+        eprintln!("Provide them with:");
+        for m in &missing {
+            eprintln!("  --param {}=<value>", m);
+        }
+        process::exit(1);
+    }
+
+    // Build resolved args (substitute {KEY} placeholders)
+    let resolved_args: Vec<String> = server_def
+        .args
+        .iter()
+        .map(|arg| {
+            let mut resolved = arg.to_string();
+            for (key, val) in &param_map {
+                resolved = resolved.replace(&format!("{{{}}}", key), val);
+            }
+            resolved
+        })
+        .collect();
+
+    // Build env map from env_keys
+    let env_map: HashMap<String, String> = server_def
+        .env_keys
+        .iter()
+        .filter_map(|key| param_map.get(*key).map(|val| (key.to_string(), val.clone())))
+        .collect();
+
+    let mut entry = serde_json::json!({
+        "command": server_def.command,
+        "args": resolved_args,
+    });
+    if !env_map.is_empty() {
+        entry["env"] = serde_json::json!(env_map);
+    }
+
+    match insert_server(
+        path,
+        client_def.config_key,
+        client_def.config_format,
+        server_def.id,
+        entry,
+    ) {
+        Ok(_) => {
+            let abs_path = expand_tilde(path);
+            println!("✓ Installed {} to {}", server_def.name, client_def.name);
+            println!(
+                "  Command: {} {}",
+                server_def.command,
+                resolved_args.join(" ")
+            );
+            println!("  Config:  {}", abs_path.display());
+        }
+        Err(e) => {
+            eprintln!("Error: {}", e);
+            process::exit(1);
+        }
+    }
+}
+
+// ─── Config helpers ───────────────────────────────────────────────────────────
+
+fn insert_server(
+    config_path: &str,
+    config_key: &str,
+    config_format: &str,
+    server_name: &str,
+    entry: serde_json::Value,
+) -> Result<(), String> {
+    if config_format == "toml" {
+        let abs_path = expand_tilde(config_path);
+        insert_server_toml(&abs_path, config_key, server_name, &entry)
+    } else {
+        insert_server_json(config_path, config_key, server_name, entry)
+    }
+}
+
+fn insert_server_json(
+    config_path: &str,
+    config_key: &str,
+    server_name: &str,
+    entry: serde_json::Value,
+) -> Result<(), String> {
+    let abs_path = expand_tilde(config_path);
+
+    if let Some(parent) = abs_path.parent() {
+        std::fs::create_dir_all(parent)
+            .map_err(|e| format!("Failed to create directories: {}", e))?;
+    }
+
+    let content = std::fs::read_to_string(&abs_path).unwrap_or_else(|_| "{}".to_string());
+    let mut root: serde_json::Value =
+        serde_json::from_str(&content).map_err(|e| format!("JSON parse error: {}", e))?;
+
+    let resolved_key = expand_config_key(config_key);
+    let servers = ensure_json_path(&mut root, &resolved_key);
+
+    servers
+        .as_object_mut()
+        .ok_or_else(|| format!("Config key '{}' is not a JSON object", config_key))?
+        .insert(server_name.to_string(), entry);
+
+    let new_content =
+        serde_json::to_string_pretty(&root).map_err(|e| format!("JSON serialize error: {}", e))?;
+
+    app_lib::commands::config::write_raw_config(config_path.to_string(), new_content)
+}
+
+fn insert_server_toml(
+    abs_path: &std::path::Path,
+    config_key: &str,
+    server_name: &str,
+    entry: &serde_json::Value,
+) -> Result<(), String> {
+    let content = std::fs::read_to_string(abs_path).unwrap_or_default();
+    let mut root: toml::Value = if content.trim().is_empty() {
+        toml::Value::Table(toml::map::Map::new())
+    } else {
+        toml::from_str(&content).map_err(|e| format!("TOML parse error: {}", e))?
+    };
+
+    let mut current = &mut root;
+    for key in config_key.split('.') {
+        if !matches!(current, toml::Value::Table(_)) {
+            *current = toml::Value::Table(toml::map::Map::new());
+        }
+        let toml::Value::Table(ref mut t) = current else {
+            return Err(format!("Expected TOML table at '{}'", key));
+        };
+        if !t.contains_key(key) {
+            t.insert(
+                key.to_string(),
+                toml::Value::Table(toml::map::Map::new()),
+            );
+        }
+        current = t
+            .get_mut(key)
+            .ok_or_else(|| format!("Key '{}' not found", key))?;
+    }
+
+    let toml::Value::Table(ref mut servers_table) = current else {
+        return Err(format!(
+            "Config key '{}' is not a TOML table",
+            config_key
+        ));
+    };
+    servers_table.insert(server_name.to_string(), json_to_toml_value(entry));
+
+    if let Some(parent) = abs_path.parent() {
+        std::fs::create_dir_all(parent)
+            .map_err(|e| format!("Failed to create directories: {}", e))?;
+    }
+
+    let output =
+        toml::to_string_pretty(&root).map_err(|e| format!("TOML serialize error: {}", e))?;
+    std::fs::write(abs_path, output).map_err(|e| format!("Write error: {}", e))
+}
+
+fn remove_server(
+    config_path: &str,
+    config_key: &str,
+    config_format: &str,
+    server_name: &str,
+) -> Result<bool, String> {
+    if config_format == "toml" {
+        let abs_path = expand_tilde(config_path);
+        remove_server_toml(&abs_path, config_key, server_name)
+    } else {
+        remove_server_json(config_path, config_key, server_name)
+    }
+}
+
+fn remove_server_json(
+    config_path: &str,
+    config_key: &str,
+    server_name: &str,
+) -> Result<bool, String> {
+    let abs_path = expand_tilde(config_path);
+    let content = std::fs::read_to_string(&abs_path)
+        .map_err(|e| format!("Failed to read config: {}", e))?;
+    let mut root: serde_json::Value =
+        serde_json::from_str(&content).map_err(|e| format!("JSON parse error: {}", e))?;
+
+    let resolved_key = expand_config_key(config_key);
+    let servers = ensure_json_path(&mut root, &resolved_key);
+    let removed = servers
+        .as_object_mut()
+        .map(|obj| obj.remove(server_name).is_some())
+        .unwrap_or(false);
+
+    if removed {
+        let new_content = serde_json::to_string_pretty(&root)
+            .map_err(|e| format!("JSON serialize error: {}", e))?;
+        app_lib::commands::config::write_raw_config(config_path.to_string(), new_content)?;
+    }
+
+    Ok(removed)
+}
+
+fn remove_server_toml(
+    abs_path: &std::path::Path,
+    config_key: &str,
+    server_name: &str,
+) -> Result<bool, String> {
+    let content = std::fs::read_to_string(abs_path)
+        .map_err(|e| format!("Failed to read config: {}", e))?;
+    let mut root: toml::Value =
+        toml::from_str(&content).map_err(|e| format!("TOML parse error: {}", e))?;
+
+    let mut current = &mut root;
+    for key in config_key.split('.') {
+        let toml::Value::Table(ref mut t) = current else {
+            return Ok(false);
+        };
+        if !t.contains_key(key) {
+            return Ok(false);
+        }
+        current = t
+            .get_mut(key)
+            .ok_or_else(|| format!("Key '{}' not found", key))?;
+    }
+
+    let removed = if let toml::Value::Table(ref mut t) = current {
+        t.remove(server_name).is_some()
+    } else {
+        false
+    };
+
+    if removed {
+        let output =
+            toml::to_string_pretty(&root).map_err(|e| format!("TOML serialize error: {}", e))?;
+        std::fs::write(abs_path, output).map_err(|e| format!("Write error: {}", e))?;
+    }
+
+    Ok(removed)
+}
+
+// ─── Ping helpers ─────────────────────────────────────────────────────────────
+
+fn ping_url(name: &str, url: &str) {
+    use std::net::ToSocketAddrs;
+
+    let stripped = url
+        .strip_prefix("https://")
+        .or_else(|| url.strip_prefix("http://"))
+        .unwrap_or(url);
+
+    let default_port: u16 = if url.starts_with("https://") { 443 } else { 80 };
+    let host_part = stripped.split('/').next().unwrap_or(stripped);
+
+    let (host, port) = if let Some(colon_pos) = host_part.rfind(':') {
+        let port_str = &host_part[colon_pos + 1..];
+        let port = port_str.parse::<u16>().unwrap_or(default_port);
+        (&host_part[..colon_pos], port)
+    } else {
+        (host_part, default_port)
+    };
+
+    let addr_str = format!("{}:{}", host, port);
+
+    match addr_str.to_socket_addrs() {
+        Ok(mut addrs) => match addrs.next() {
+            Some(addr) => {
+                match std::net::TcpStream::connect_timeout(
+                    &addr,
+                    std::time::Duration::from_secs(3),
+                ) {
+                    Ok(_) => println!("✓ {} is reachable ({})", name, addr_str),
+                    Err(e) => {
+                        eprintln!("✗ {} is unreachable: {}", name, e);
+                        process::exit(1);
+                    }
+                }
+            }
+            None => {
+                eprintln!("✗ {} — DNS returned no addresses for {}", name, addr_str);
+                process::exit(1);
+            }
+        },
+        Err(e) => {
+            eprintln!("✗ {} — DNS resolution failed for {}: {}", name, addr_str, e);
+            process::exit(1);
+        }
+    }
+}
+
+fn ping_command(name: &str, cmd: &str) {
+    match std::process::Command::new("which").arg(cmd).output() {
+        Ok(output) => {
+            if output.status.success() {
+                let path = String::from_utf8_lossy(&output.stdout).trim().to_string();
+                println!("✓ {} — {} found in PATH: {}", name, cmd, path);
+            } else {
+                eprintln!("✗ {} — {} not found in PATH", name, cmd);
+                process::exit(1);
+            }
+        }
+        Err(e) => {
+            eprintln!("Error running which: {}", e);
+            process::exit(1);
+        }
+    }
+}
+
+// ─── TOML conversion ──────────────────────────────────────────────────────────
+
+fn json_to_toml_value(v: &serde_json::Value) -> toml::Value {
+    match v {
+        serde_json::Value::Null => toml::Value::String(String::new()),
+        serde_json::Value::Bool(b) => toml::Value::Boolean(*b),
+        serde_json::Value::Number(n) => {
+            if let Some(i) = n.as_i64() {
+                toml::Value::Integer(i)
+            } else {
+                toml::Value::Float(n.as_f64().unwrap_or(0.0))
+            }
+        }
+        serde_json::Value::String(s) => toml::Value::String(s.clone()),
+        serde_json::Value::Array(arr) => {
+            toml::Value::Array(arr.iter().map(json_to_toml_value).collect())
+        }
+        serde_json::Value::Object(obj) => {
+            let map = obj
+                .iter()
+                .map(|(k, v)| (k.clone(), json_to_toml_value(v)))
+                .collect();
+            toml::Value::Table(map)
         }
     }
 }

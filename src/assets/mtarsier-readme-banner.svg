@@ -1,0 +1,103 @@
+<svg width="1200" height="280" viewBox="0 0 1200 280" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <radialGradient id="bg_glow" cx="14%" cy="50%" r="45%" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#00ff88" stop-opacity="0.09"/>
+      <stop offset="100%" stop-color="#00ff88" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="tg0" x1="416.37" y1="-0.18" x2="416.37" y2="390.5" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#28662B"/><stop offset="1" stop-color="#193F0A"/>
+    </linearGradient>
+    <linearGradient id="tg1" x1="413.54" y1="75.8" x2="413.54" y2="369.06" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#276226"/><stop offset="1" stop-color="#173A07"/>
+    </linearGradient>
+    <linearGradient id="tg2" x1="264.12" y1="84.16" x2="264.12" y2="352.82" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#224A1B"/><stop offset="1" stop-color="#14360A"/>
+    </linearGradient>
+    <linearGradient id="tg3" x1="561.64" y1="87.07" x2="561.64" y2="349.02" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#224A1B"/><stop offset="1" stop-color="#14360A"/>
+    </linearGradient>
+    <linearGradient id="tg4" x1="265.04" y1="144.38" x2="265.04" y2="300.62" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#0A2601"/><stop offset="1" stop-color="#0B2904"/>
+    </linearGradient>
+    <linearGradient id="tg5" x1="564.13" y1="144.38" x2="564.13" y2="300.62" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#0A2601"/><stop offset="1" stop-color="#0B2904"/>
+    </linearGradient>
+    <filter id="t_sf" x="-20%" y="-20%" width="140%" height="140%">
+      <feGaussianBlur stdDeviation="4" result="blur"/>
+      <feComposite in="SourceGraphic" in2="blur" operator="over"/>
+    </filter>
+    <filter id="t_hf" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur stdDeviation="3" result="blur"/>
+      <feComposite in="SourceGraphic" in2="blur" operator="over"/>
+    </filter>
+    <radialGradient id="t_iL" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#E8F88E" stop-opacity="0.6"/>
+      <stop offset="100%" stop-color="#E8F88E" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="t_iR" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#E8F88E" stop-opacity="0.6"/>
+      <stop offset="100%" stop-color="#E8F88E" stop-opacity="0"/>
+    </radialGradient>
+    <clipPath id="t_cL"><circle cx="265" cy="227" r="134"/></clipPath>
+    <clipPath id="t_cR"><circle cx="565" cy="227" r="130"/></clipPath>
+  </defs>
+
+  <rect width="1200" height="280" fill="#080c0a" rx="12"/>
+  <rect width="1200" height="280" rx="12" fill="url(#bg_glow)"/>
+  <rect x="0" y="0" width="3" height="280" rx="1.5" fill="#00ff88" fill-opacity="0.75"/>
+
+  <!-- Tarsier logo scaled to ~233×109, centered vertically -->
+  <g transform="translate(14, 85) scale(0.28)">
+    <path d="M820.303 8.84321C811.126 2.10269 783.701 -0.766337 761.165 0.650901C684.135 3.41624 613.73 39.1929 574.329 76.1447L569.262 77.5965H563.593C521.889 59.207 471.893 51.6715 417.965 51.6715C366.092 50.5653 314.927 59.6218 277.297 75.7991L261.211 76.1447C216.92 37.741 141.803 2.72489 70.1227 0.305212C49.2883 -0.800924 21.8988 0.996558 13.7493 7.39141C5.59982 13.7517 0.143187 34.3881 0.00145686 62.3872C-0.211139 109.536 22.8555 154.784 61.6188 190.146L62.7881 189.385C29.9775 151.362 14.8123 106.598 15.9107 65.9821C16.6902 42.0965 21.4736 21.391 42.2017 19.5935C88.5122 15.3763 140.704 56.5108 157.535 104.075L158.598 111.956C123.803 142.72 106.583 185.099 108.036 229.241C111.083 302.868 173.338 369.167 262.168 369.167C295.758 369.167 323.431 360.629 348.623 349.879C370.91 367.024 393.091 383.167 401.843 387.833C409.993 391.947 419.949 389.389 425.618 384.342C434.477 377.325 456.197 362.876 480.893 348.6C506.724 363.395 531.952 369.167 565.932 369.167C650.97 369.167 719.142 301.624 720.064 227.72C720.631 183.405 700.647 141.027 670.174 113.926L672.23 111.576C690.088 64.0118 737.603 19.4552 789.866 20.6651C810.736 21.1836 816.405 34.0424 817.539 63.2859C819.027 103.867 801.133 151.362 766.799 191.114L767.933 191.84C808.504 154.335 830.507 111.23 832.35 64.0809C833.094 43.0298 826.928 14.1319 820.303 8.84321Z" fill="url(#tg0)"/>
+    <path d="M566.959 77.5965C493.33 77.5965 417.256 132.177 417.256 213.893C417.256 152.987 354.186 75.7991 260.467 75.7991C178.688 75.7991 108.106 140.819 108.106 225.992C108.106 302.039 171.602 368.096 258.624 368.096C329.525 368.096 392.631 327.653 414.422 286.311C433.13 332.872 470.76 368.096 566.569 368.096C649.943 368.096 719.32 300.898 719.32 225.577C719.32 143.654 650.687 77.5965 566.959 77.5965Z" fill="url(#tg1)"/>
+    <path d="M266.207 84.1643C184.712 84.1643 128.232 147.871 128.232 225.577C128.232 296.508 184.712 352.852 261.778 352.852C340.049 352.852 400.036 294.883 400.036 223.952C400.036 148.459 339.482 84.1643 266.207 84.1643Z" fill="url(#tg2)"/>
+    <path d="M565.896 87.0679C489.397 87.0679 428.843 148.562 428.843 223.883C428.843 294.814 488.83 349.119 565.542 349.119C640.092 349.119 694.446 287.624 694.446 224.609C694.446 153.678 636.407 87.0679 565.896 87.0679Z" fill="url(#tg3)"/>
+    <path d="M267.341 104.42C195.66 104.42 138.791 159.001 138.791 226.925C138.791 292.118 192.365 346.699 264.754 346.699C336.789 346.699 393.268 293.224 393.268 228.031C393.268 161.767 337.178 104.42 267.341 104.42Z" fill="#E8F88E"/>
+    <ellipse cx="265" cy="226" rx="128" ry="120" fill="url(#t_iL)" filter="url(#t_sf)"/>
+    <path d="M265.109 129.17C209.408 129.17 163.842 174.28 163.842 227.063C163.842 277.289 208.31 322.398 264.4 322.398C320.844 322.398 366.41 276.563 366.41 224.125C366.41 174.28 320.49 129.17 265.109 129.17Z" fill="#38752A"/>
+    <path d="M265.108 144.38C219.932 144.38 183.826 181.401 183.826 223.676C183.826 264.119 220.286 300.656 264.754 300.656C309.754 300.656 346.249 262.978 346.249 222.57C346.249 181.401 309.399 144.38 265.108 144.38Z" fill="url(#tg4)"/>
+    <g clip-path="url(#t_cL)">
+      <path d="M306.6 145.417C289.238 145.417 284.49 156.547 284.49 165.638C284.49 179.983 296.679 185.514 306.246 185.514C321.801 185.514 328.887 174.591 328.887 166.71C328.887 156.547 319.71 145.417 306.6 145.417Z" fill="#E8F88E" filter="url(#t_hf)"/>
+      <path d="M290.337 184.131C282.648 184.131 279.636 190.146 279.636 194.363C279.636 200.758 284.951 204.284 289.911 204.284C296.644 204.284 300.435 198.96 300.435 194.882C300.435 189.835 295.864 184.131 290.337 184.131Z" fill="#E8F88E" filter="url(#t_hf)"/>
+    </g>
+    <path d="M565.896 104.42C494.216 104.42 437.346 159.001 437.346 226.925C437.346 292.118 490.921 346.699 563.31 346.699C635.344 346.699 691.824 293.224 691.824 228.031C691.824 161.767 635.734 104.42 565.896 104.42Z" fill="#E8F88E"/>
+    <ellipse cx="564" cy="226" rx="126" ry="118" fill="url(#t_iR)" filter="url(#t_sf)"/>
+    <path d="M564.833 129.17C512.003 129.17 462.185 172.966 462.185 225.266C462.185 275.491 507.751 320.601 561.857 320.601C616.565 320.601 663.797 274.765 663.797 224.54C663.797 174.66 617.876 129.17 564.833 129.17Z" fill="#38752A"/>
+    <path d="M563.77 144.38C520.401 144.38 483.551 181.401 483.551 223.676C483.551 264.119 520.401 300.656 563.77 300.656C608.593 300.656 644.734 262.978 644.734 222.57C644.734 181.401 607.849 144.38 563.77 144.38Z" fill="url(#tg5)"/>
+    <g clip-path="url(#t_cR)">
+      <path d="M605.581 148.873C588.963 148.873 584.215 159.451 584.215 168.162C584.215 181.919 596.049 187.173 605.226 187.173C620.214 187.173 628.364 175.697 628.364 168.162C628.364 159.105 618.336 148.873 605.581 148.873Z" fill="#E8F88E" filter="url(#t_hf)"/>
+      <path d="M588.927 185.168C581.628 185.168 579.006 191.217 579.006 194.916C579.006 200.62 583.825 203.8 588.183 203.8C594.384 203.8 597.786 198.442 597.786 194.916C597.786 190.215 593.817 185.168 588.927 185.168Z" fill="#E8F88E" filter="url(#t_hf)"/>
+    </g>
+  </g>
+
+  <text x="268" y="128" fill="#ffffff" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,sans-serif" font-weight="800" font-size="52" letter-spacing="-2">mTarsier</text>
+  <text x="270" y="163" fill="#9ca3af" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,sans-serif" font-size="19">MCP Management, without the chaos.</text>
+
+  <rect x="270" y="187" width="54" height="24" rx="12" fill="#0a1f14" stroke="#00ff88" stroke-width="1" stroke-opacity="0.35"/>
+  <text x="297" y="203" fill="#00ff88" font-family="-apple-system,BlinkMacSystemFont,system-ui,sans-serif" font-size="10" font-weight="700" text-anchor="middle" letter-spacing="1">FREE</text>
+  <rect x="334" y="187" width="104" height="24" rx="12" fill="#0a1f14" stroke="#00ff88" stroke-width="1" stroke-opacity="0.35"/>
+  <text x="386" y="203" fill="#00ff88" font-family="-apple-system,BlinkMacSystemFont,system-ui,sans-serif" font-size="10" font-weight="700" text-anchor="middle" letter-spacing="1">OPEN SOURCE</text>
+  <rect x="448" y="187" width="68" height="24" rx="12" fill="#0a1f14" stroke="#00ff88" stroke-width="1" stroke-opacity="0.35"/>
+  <text x="482" y="203" fill="#00ff88" font-family="-apple-system,BlinkMacSystemFont,system-ui,sans-serif" font-size="10" font-weight="700" text-anchor="middle" letter-spacing="1">MACOS</text>
+  <rect x="526" y="187" width="80" height="24" rx="12" fill="#0a1f14" stroke="#00ff88" stroke-width="1" stroke-opacity="0.35"/>
+  <text x="566" y="203" fill="#00ff88" font-family="-apple-system,BlinkMacSystemFont,system-ui,sans-serif" font-size="10" font-weight="700" text-anchor="middle" letter-spacing="1">WINDOWS</text>
+  <rect x="616" y="187" width="62" height="24" rx="12" fill="#0a1f14" stroke="#00ff88" stroke-width="1" stroke-opacity="0.35"/>
+  <text x="647" y="203" fill="#00ff88" font-family="-apple-system,BlinkMacSystemFont,system-ui,sans-serif" font-size="10" font-weight="700" text-anchor="middle" letter-spacing="1">LINUX</text>
+
+  <g opacity="0.22">
+    <rect x="870" y="72" width="276" height="34" rx="7" fill="#1a2e20" stroke="#00ff88" stroke-width="1"/>
+    <rect x="883" y="83" width="7" height="7" rx="2" fill="#00ff88" opacity="0.7"/>
+    <rect x="898" y="85" width="110" height="3.5" rx="1.5" fill="#4b5563"/>
+    <rect x="1122" y="85" width="10" height="3.5" rx="1.5" fill="#00ff88" opacity="0.6"/>
+    <rect x="870" y="116" width="276" height="34" rx="7" fill="#1a2e20" stroke="#00ff88" stroke-width="1"/>
+    <rect x="883" y="127" width="7" height="7" rx="2" fill="#00ff88" opacity="0.7"/>
+    <rect x="898" y="129" width="90" height="3.5" rx="1.5" fill="#4b5563"/>
+    <rect x="1122" y="129" width="10" height="3.5" rx="1.5" fill="#00ff88" opacity="0.6"/>
+    <rect x="870" y="160" width="276" height="34" rx="7" fill="#1a2e20" stroke="#00ff88" stroke-width="1"/>
+    <rect x="883" y="171" width="7" height="7" rx="2" fill="#00ff88" opacity="0.7"/>
+    <rect x="898" y="173" width="130" height="3.5" rx="1.5" fill="#4b5563"/>
+    <rect x="1122" y="173" width="10" height="3.5" rx="1.5" fill="#00ff88" opacity="0.6"/>
+  </g>
+
+  <text x="1186" y="266" fill="#374151" font-family="-apple-system,BlinkMacSystemFont,system-ui,sans-serif" font-size="12" text-anchor="end">mcp360.ai/mtarsier</text>
+</svg>
