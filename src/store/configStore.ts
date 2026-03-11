@@ -1,6 +1,7 @@
 import { create } from "zustand";
 import { invoke } from "@tauri-apps/api/core";
 import { getClientById } from "../lib/clients";
+import { useClientStore } from "./clientStore";
 import type { BackupEntry, RestoreDiff, PendingRestore } from "../types/config";
 import type { ClientMeta } from "../types/client";
 
@@ -202,7 +203,13 @@ export const useConfigStore = create<ConfigStore>((set, get) => ({
   },
 
   setRawContent: (content) => {
-    set({ rawContent: content, isDirty: true, validationError: null });
+    let validationError: string | null = null;
+    try {
+      JSON.parse(content);
+    } catch (e) {
+      validationError = String(e).replace(/^SyntaxError:\s*/, "");
+    }
+    set({ rawContent: content, isDirty: true, validationError: content.trim() ? validationError : null });
   },
 
   loadConfig: async (clientId) => {
@@ -346,6 +353,7 @@ export const useConfigStore = create<ConfigStore>((set, get) => ({
         });
       }
       get().loadBackups();
+      useClientStore.getState().detectAll();
     } catch (err) {
       set({ error: String(err), isSaving: false });
     }
@@ -363,11 +371,11 @@ export const useConfigStore = create<ConfigStore>((set, get) => ({
   },
 
   validateContent: async () => {
-    const { rawContent, selectedClient } = get();
+    const { rawContent } = get();
     try {
       await invoke("validate_config", {
         content: rawContent,
-        format: selectedClient?.configFormat ?? "json",
+        format: "json", // rawContent is always JSON (TOML clients are pre-converted on load)
       });
       set({ validationError: null });
     } catch (err) {

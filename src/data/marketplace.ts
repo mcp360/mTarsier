@@ -201,6 +201,28 @@ export const MARKETPLACE_SERVERS: MarketplaceServer[] = [
 
   // ── AI ─────────────────────────────────────────────────────────────────────
   {
+    id: "llm-prompt-tracker",
+    name: "LLM Prompt Tracker",
+    description:
+      "Track and compare prompt visibility and rankings across AI platforms — ChatGPT, Claude, Perplexity, Grok, and Gemini.",
+    publisher: "MCP360",
+    category: "AI",
+    command: "npx",
+    args: ["mcp-remote", "https://connect.mcp360.ai/v1/llm-prompt-tracker/mcp?token={MCP360_TOKEN}"],
+    remoteUrl: "https://connect.mcp360.ai/v1/llm-prompt-tracker/mcp?token={MCP360_TOKEN}",
+    params: [
+      {
+        key: "MCP360_TOKEN",
+        label: "MCP360 API Key",
+        placeholder: "mcp360_...",
+        required: true,
+        hint: "Generate at dashboard.mcp360.ai",
+        secret: true,
+      },
+    ],
+    docsUrl: "https://mcp360.ai/mcps/llm-prompt-tracker",
+  },
+  {
     id: "memory",
     name: "Memory",
     description:
@@ -323,6 +345,51 @@ export const MARKETPLACE_SERVERS: MarketplaceServer[] = [
     official: true,
     docsUrl:
       "https://github.com/modelcontextprotocol/servers/tree/main/src/google-maps",
+  },
+
+  {
+    id: "onpage-seo",
+    name: "OnPage SEO Checker",
+    description:
+      "Comprehensive on-page SEO analysis — check title tags, meta descriptions, headings, images, links, mobile optimization, performance, and structured data.",
+    publisher: "MCP360",
+    category: "Search",
+    command: "npx",
+    args: ["mcp-remote", "https://connect.mcp360.ai/v1/onpage-seo/mcp?token={MCP360_TOKEN}"],
+    remoteUrl: "https://connect.mcp360.ai/v1/onpage-seo/mcp?token={MCP360_TOKEN}",
+    params: [
+      {
+        key: "MCP360_TOKEN",
+        label: "MCP360 API Key",
+        placeholder: "mcp360_...",
+        required: true,
+        hint: "Generate at dashboard.mcp360.ai",
+        secret: true,
+      },
+    ],
+    docsUrl: "https://mcp360.ai/mcps/onpage-seo",
+  },
+  {
+    id: "keyword-research",
+    name: "Keyword Research Tools",
+    description:
+      "Get global search volumes and related keyword suggestions for SEO and content planning.",
+    publisher: "MCP360",
+    category: "Search",
+    command: "npx",
+    args: ["mcp-remote", "https://connect.mcp360.ai/v1/keyword-research/mcp?token={MCP360_TOKEN}"],
+    remoteUrl: "https://connect.mcp360.ai/v1/keyword-research/mcp?token={MCP360_TOKEN}",
+    params: [
+      {
+        key: "MCP360_TOKEN",
+        label: "MCP360 API Key",
+        placeholder: "mcp360_...",
+        required: true,
+        hint: "Generate at dashboard.mcp360.ai",
+        secret: true,
+      },
+    ],
+    docsUrl: "https://mcp360.ai/mcps/keyword-research",
   },
 
   // ── Productivity ───────────────────────────────────────────────────────────

@@ -10,7 +10,6 @@ function ConfigToolbar() {
     isSaving,
     saveConfig,
     formatJson,
-    validateContent,
     toggleBackupPanel,
     showBackupPanel,
   } = useConfigStore();
@@ -24,8 +23,8 @@ function ConfigToolbar() {
   return (
     <div className="flex items-center justify-between px-6 py-3 border-b border-border bg-base-light/50 gap-4">
       <div className="min-w-0 flex-1">
-        <div className="flex items-center gap-2">
-          <h2 className="text-sm font-semibold truncate">{selectedClient.name}</h2>
+        <div className="flex items-center gap-2 min-w-0">
+          <h2 className="text-sm font-semibold flex-shrink-0">{selectedClient.name}</h2>
           {showScope && <ScopeSelector />}
         </div>
         <p className="text-[11px] text-text-muted font-mono truncate mt-0.5">
@@ -41,12 +40,6 @@ function ConfigToolbar() {
               className="px-3 py-1.5 text-xs text-text-muted hover:text-text bg-surface hover:bg-surface-hover border border-border rounded-md transition-colors"
             >
               Format
-            </button>
-            <button
-              onClick={validateContent}
-              className="px-3 py-1.5 text-xs text-text-muted hover:text-text bg-surface hover:bg-surface-hover border border-border rounded-md transition-colors"
-            >
-              Validate
             </button>
           </>
         )}

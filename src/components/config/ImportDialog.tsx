@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { useConfigStore } from "../../store/configStore";
+import { useClientStore } from "../../store/clientStore";
 import { getConfigurableClients } from "../../lib/clients";
 import type { ClientMeta } from "../../types/client";
 import type { ProjectScope } from "../../store/configStore";
@@ -91,7 +92,8 @@ interface Props {
 
 function ImportDialog({ onClose, onImported }: Props) {
   const { selectedClientId, addServer } = useConfigStore();
-  const [source, setSource] = useState<"file" | "client">("file");
+  const detectedClients = useClientStore((s) => s.clients);
+  const [source, setSource] = useState<"file" | "client">("client");
   const [clientId, setClientId] = useState("");
   const [importScope, setImportScope] = useState("user");
   const [projectScopes, setProjectScopes] = useState<ProjectScope[]>([]);
@@ -218,7 +220,7 @@ function ImportDialog({ onClose, onImported }: Props) {
         <div className="px-5 pt-4 pb-3">
           <p className="text-xs font-medium text-text-muted mb-2">Import from</p>
           <div className="flex gap-2">
-            {(["file", "client"] as const).map((s) => (
+            {(["client", "file"] as const).map((s) => (
               <button
                 key={s}
                 onClick={() => resetSource(s)}
@@ -233,50 +235,67 @@ function ImportDialog({ onClose, onImported }: Props) {
         {/* Source controls */}
         <div className="px-5 pb-3 space-y-2">
           {source === "file" ? (
-            <button
-              onClick={handlePickFile}
-              disabled={loading}
-              className="w-full py-2 text-xs border border-dashed border-border rounded-md text-text-muted hover:border-primary/30 hover:text-primary transition-colors disabled:opacity-50"
-            >
-              {loading ? "Loading…" : fileLoaded ? "Choose a different file…" : "Choose .tsr or .json file…"}
-            </button>
+            <>
+              <button
+                onClick={handlePickFile}
+                disabled={loading}
+                className="w-full py-2 text-xs border border-dashed border-border rounded-md text-text-muted hover:border-primary/30 hover:text-primary transition-colors disabled:opacity-50"
+              >
+                {loading ? "Loading…" : fileLoaded ? "Choose a different file…" : "Choose .tsr or .json file…"}
+              </button>
+              <p className="text-[11px] text-text-muted/60 text-center">
+                Import a previously exported mTarsier config file (.tsr or .json)
+              </p>
+            </>
           ) : (
             <>
-              <select
-                value={clientId}
-                onChange={(e) => setClientId(e.target.value)}
-                className="w-full px-2.5 py-1.5 text-xs bg-base border border-border rounded-md text-text focus:outline-none focus:border-primary/50"
-              >
-                <option value="">Select a client…</option>
-                {targets.map((c) => (
-                  <option key={c.id} value={c.id}>{c.name}</option>
-                ))}
-              </select>
+              <div className="relative">
+                <select
+                  value={clientId}
+                  onChange={(e) => setClientId(e.target.value)}
+                  className="appearance-none w-full pl-2.5 pr-8 py-1.5 text-xs bg-surface border border-border rounded-md text-text focus:outline-none focus:border-primary/60 cursor-pointer hover:border-primary/40 transition-colors"
+                >
+                  <option value="">Pick a client…</option>
+                  {targets.map((c) => {
+                    const count = detectedClients.find((d) => d.meta.id === c.id)?.serverCount;
+                    const label = count != null ? `${c.name}  (${count} server${count !== 1 ? "s" : ""})` : c.name;
+                    return <option key={c.id} value={c.id}>{label}</option>;
+                  })}
+                </select>
+                <svg className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 w-3 h-3 text-text-muted" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5}>
+                  <path d="M6 9l6 6 6-6" strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
+              </div>
 
               {/* Scope picker — only for Claude Code */}
               {isScoped && clientId && (
-                <select
-                  value={importScope}
-                  onChange={(e) => setImportScope(e.target.value)}
-                  className="w-full px-2.5 py-1.5 text-xs bg-base border border-border rounded-md text-text focus:outline-none focus:border-primary/50"
-                >
-                  <optgroup label="~/.claude.json">
-                    <option value="user">Global — all projects (--scope user)</option>
-                    <option value="local">Local — home dir (--scope local)</option>
-                  </optgroup>
-                  {projectScopes.length > 0 && (
-                    <optgroup label="Per-project local">
-                      {projectScopes.map((p) => {
-                        const label = p.path.replace(/^\/Users\/[^/]+\//, "~/");
-                        return (
-                          <option key={p.path} value={p.path}>
-                            {label} ({p.server_count})
-                          </option>
-                        );
-                      })}
+                <div className="relative">
+                  <select
+                    value={importScope}
+                    onChange={(e) => setImportScope(e.target.value)}
+                    className="appearance-none w-full pl-2.5 pr-8 py-1.5 text-xs bg-surface border border-border rounded-md text-text focus:outline-none focus:border-primary/60 cursor-pointer hover:border-primary/40 transition-colors"
+                  >
+                    <optgroup label="~/.claude.json">
+                      <option value="user">Global (--scope user)</option>
+                      <option value="local">Local / home dir</option>
                     </optgroup>
-                  )}
-                </select>
+                    {projectScopes.length > 0 && (
+                      <optgroup label="Per-project">
+                        {projectScopes.map((p) => {
+                          const label = p.path.replace(/^\/Users\/[^/]+\//, "~/");
+                          return (
+                            <option key={p.path} value={p.path}>
+                              {label} ({p.server_count})
+                            </option>
+                          );
+                        })}
+                      </optgroup>
+                    )}
+                  </select>
+                  <svg className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 w-3 h-3 text-text-muted" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5}>
+                    <path d="M6 9l6 6 6-6" strokeLinecap="round" strokeLinejoin="round" />
+                  </svg>
+                </div>
               )}
             </>
           )}

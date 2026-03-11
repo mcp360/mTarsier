@@ -2,7 +2,6 @@ import { useEffect, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { useClientStore } from "../store/clientStore";
 import { useAuditStore } from "../store/auditStore";
-import { useClientDetection } from "../hooks/useClientDetection";
 import type { ClientType } from "../types/client";
 
 const CLIENT_TYPES: ClientType[] = ["Desktop", "IDE", "CLI"];
@@ -45,8 +44,6 @@ function formatRelativeTime(iso: string): string {
 
 function Dashboard() {
   const navigate = useNavigate();
-  useClientDetection();
-
   const { clients, isDetecting } = useClientStore();
   const { entries, loadLogs } = useAuditStore();
 
@@ -89,7 +86,7 @@ function Dashboard() {
     return map;
   }, [clients]);
 
-  const loading = isDetecting;
+  const loading = isDetecting && clients.every((c) => !c.installed && c.serverCount === null);
 
   return (
     <div className="flex h-full flex-col overflow-y-auto">

@@ -98,3 +98,14 @@
 @utility animate-pulse-dot {
   animation: pulse-dot 2s ease-in-out infinite;
 }
+
+@keyframes bubble-in {
+  0%   { opacity: 0; transform: translateX(-10px) scale(0.85); }
+  55%  { opacity: 1; transform: translateX(5px) scale(1.04); }
+  75%  { transform: translateX(-3px) scale(0.98); }
+  100% { opacity: 1; transform: translateX(0) scale(1); }
+}
+
+@utility animate-bubble-in {
+  animation: bubble-in 0.55s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+}

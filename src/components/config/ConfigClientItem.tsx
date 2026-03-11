@@ -1,3 +1,4 @@
+import { useState } from "react";
 import type { ClientMeta } from "../../types/client";
 
 interface Props {
@@ -14,10 +15,12 @@ const typeBadgeColors: Record<string, string> = {
 };
 
 function ConfigClientItem({ client, isSelected, configExists, onSelect }: Props) {
+  const [dotHovered, setDotHovered] = useState(false);
+
   return (
     <button
       onClick={onSelect}
-      className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg text-left transition-colors overflow-hidden ${
+      className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg text-left transition-colors ${
         isSelected
           ? "bg-primary/10 border border-primary/30"
           : "hover:bg-surface-hover border border-transparent"
@@ -27,7 +30,18 @@ function ConfigClientItem({ client, isSelected, configExists, onSelect }: Props)
         <div className="flex items-center gap-2">
           <span className="text-sm font-medium truncate">{client.name}</span>
           {configExists && (
-            <span className="w-1.5 h-1.5 rounded-full bg-primary flex-shrink-0" />
+            <span
+              className="relative flex-shrink-0 p-1 -m-1"
+              onMouseEnter={() => setDotHovered(true)}
+              onMouseLeave={() => setDotHovered(false)}
+            >
+              <span className="w-1.5 h-1.5 rounded-full bg-primary block" />
+              {dotHovered && (
+                <span className="pointer-events-none absolute left-1/2 -translate-x-1/2 bottom-[calc(100%+2px)] px-1.5 py-0.5 rounded text-[10px] font-medium bg-surface-overlay text-primary whitespace-nowrap z-50">
+                  Installed
+                </span>
+              )}
+            </span>
           )}
         </div>
       </div>

@@ -152,6 +152,19 @@ export const CLIENT_REGISTRY: ClientMeta[] = [
     detection: { kind: "cli_binary", name: "gemini" },
     supportedTransports: ["stdio", "sse", "streamable-http"],
   },
+  {
+    id: "antigravity",
+    name: "Antigravity",
+    type: "IDE",
+    docsUrl: "https://antigravity.google/docs/mcp",
+    configPath: "~/.gemini/antigravity/mcp_config.json",
+    configPathWin: "%USERPROFILE%\\.gemini\\antigravity\\mcp_config.json",
+    configPathLinux: "~/.gemini/antigravity/mcp_config.json",
+    configKey: "mcpServers",
+    configFormat: "json",
+    detection: { kind: "app_bundle", path: "/Applications/Antigravity.app" },
+    supportedTransports: ["stdio", "sse", "streamable-http"],
+  },
 
   // ── IDEs ─────────────────────────────────────────────────────────────────
   {

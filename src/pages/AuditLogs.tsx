@@ -1,4 +1,5 @@
 import { useEffect, useMemo } from "react";
+import { invoke } from "@tauri-apps/api/core";
 import { useAuditStore } from "../store/auditStore";
 
 const ACTION_LABELS: Record<string, { label: string; color: string }> = {
@@ -72,13 +73,8 @@ function AuditLogs() {
   const handleExport = async () => {
     try {
       const json = await exportLogs();
-      const blob = new Blob([json], { type: "application/json" });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = `mtarsier-audit-${new Date().toISOString().slice(0, 10)}.json`;
-      a.click();
-      URL.revokeObjectURL(url);
+      const filename = `mtarsier-audit-${new Date().toISOString().slice(0, 10)}.json`;
+      await invoke("export_tsr", { content: json, filename });
     } catch {
       // silently fail
     }
@@ -96,31 +92,41 @@ function AuditLogs() {
 
       {/* Toolbar */}
       <div className="flex items-center gap-3 px-6 pb-4 flex-wrap">
-        <select
-          value={filterAction}
-          onChange={(e) => setFilterAction(e.target.value)}
-          className="rounded-lg border border-border bg-surface px-3 py-1.5 text-xs text-text focus:border-primary focus:outline-none"
-        >
-          <option value="all">All Actions</option>
-          {uniqueActions.map((a) => (
-            <option key={a} value={a}>
-              {ACTION_LABELS[a]?.label ?? a}
-            </option>
-          ))}
-        </select>
+        <div className="relative">
+          <select
+            value={filterAction}
+            onChange={(e) => setFilterAction(e.target.value)}
+            className="appearance-none rounded-lg border border-border bg-surface pl-3 pr-8 py-1.5 text-xs text-text focus:border-primary/60 focus:outline-none cursor-pointer hover:border-primary/40 transition-colors"
+          >
+            <option value="all">All Actions</option>
+            {uniqueActions.map((a) => (
+              <option key={a} value={a}>
+                {ACTION_LABELS[a]?.label ?? a}
+              </option>
+            ))}
+          </select>
+          <svg className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 w-3 h-3 text-text-muted" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5}>
+            <path d="M6 9l6 6 6-6" strokeLinecap="round" strokeLinejoin="round" />
+          </svg>
+        </div>
 
-        <select
-          value={filterClient}
-          onChange={(e) => setFilterClient(e.target.value)}
-          className="rounded-lg border border-border bg-surface px-3 py-1.5 text-xs text-text focus:border-primary focus:outline-none"
-        >
-          <option value="all">All Clients</option>
-          {uniqueClients.map((c) => (
-            <option key={c} value={c}>
-              {c}
-            </option>
-          ))}
-        </select>
+        <div className="relative">
+          <select
+            value={filterClient}
+            onChange={(e) => setFilterClient(e.target.value)}
+            className="appearance-none rounded-lg border border-border bg-surface pl-3 pr-8 py-1.5 text-xs text-text focus:border-primary/60 focus:outline-none cursor-pointer hover:border-primary/40 transition-colors"
+          >
+            <option value="all">All Clients</option>
+            {uniqueClients.map((c) => (
+              <option key={c} value={c}>
+                {c}
+              </option>
+            ))}
+          </select>
+          <svg className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 w-3 h-3 text-text-muted" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5}>
+            <path d="M6 9l6 6 6-6" strokeLinecap="round" strokeLinejoin="round" />
+          </svg>
+        </div>
 
         <div className="flex-1" />
 
