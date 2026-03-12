@@ -27,19 +27,20 @@ jobs:
             arch: x86_64
 
     runs-on: ${{ matrix.platform }}
+    env:
+      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true  # fallback for pnpm/action-setup until it ships a node24-native build
 
     steps:
-      - uses: actions/checkout@v4
-
-      - name: Install Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: 24
+      - uses: actions/checkout@v5
 
       - name: Install pnpm
         uses: pnpm/action-setup@v4
+
+      - name: Install Node.js
+        uses: actions/setup-node@v5
         with:
-          version: 10
+          node-version: 24
+          cache: pnpm
 
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
