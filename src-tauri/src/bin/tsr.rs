@@ -90,7 +90,11 @@ enum Commands {
 fn main() {
     let cli = Cli::parse();
     match cli.command {
-        None => println!("mTarsier CLI — use --help to see available commands"),
+        None => {
+            use clap::CommandFactory;
+            Cli::command().print_help().ok();
+            println!();
+        }
         Some(Commands::Clients { json }) => cmd_clients(json),
         Some(Commands::List { client, json }) => cmd_list(client, json),
         Some(Commands::Add {

@@ -372,7 +372,7 @@ export const useConfigStore = create<ConfigStore>((set, get) => ({
   },
 
   saveConfig: async () => {
-    const { selectedClient, mode, rawContent, servers, disabledServers, removedServers, activeScope } = get();
+    const { selectedClient, mode, rawContent, servers, activeScope } = get();
     if (!selectedClient || !selectedClient.configPath) return;
 
     const effectiveKey = getEffectiveConfigKey(selectedClient, activeScope);
