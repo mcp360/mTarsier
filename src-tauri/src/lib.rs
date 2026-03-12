@@ -2,9 +2,12 @@ pub mod commands;
 pub mod marketplace;
 pub mod registry;
 
+use std::sync::Mutex;
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
   tauri::Builder::default()
+    .manage(commands::updater::PendingUpdate(Mutex::new(None)))
     .invoke_handler(tauri::generate_handler![
       commands::clients::detect_installed_clients,
       commands::clients::get_client_config,
@@ -29,7 +32,10 @@ pub fn run() {
       commands::cli::check_cli_installed,
       commands::io::export_tsr,
       commands::io::import_tsr,
+      commands::updater::check_for_update,
+      commands::updater::install_update,
     ])
+    .plugin(tauri_plugin_updater::Builder::new().build())
     .plugin(tauri_plugin_dialog::init())
     .plugin(tauri_plugin_shell::init())
     .setup(|app| {

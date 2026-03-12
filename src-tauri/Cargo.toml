@@ -37,4 +37,5 @@ dirs = "5"
 chrono = "0.4"
 toml = "0.8"
 tauri-plugin-dialog = "2"
+tauri-plugin-updater = "2"
 clap = { version = "4", features = ["derive"] }
