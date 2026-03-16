@@ -2,11 +2,14 @@
 
 [![mTarsier — MCP Management, without the chaos.](https://raw.githubusercontent.com/mcp360/mTarsier/main/src/assets/mtarsier-readme-banner.svg)](https://mcp360.ai/mtarsier)
 
+[![GitHub Stars](https://img.shields.io/github/stars/mcp360/mTarsier?style=social)](https://github.com/mcp360/mTarsier)
+
 **MCP Management, without the chaos.**
+
 
 mTarsier is an open-source platform for managing MCP servers and clients — so Claude, Cursor, VS Code and every AI tool you use always has the right MCP connections, without the chaos.
 
-> Named after the Tarsier — a primate with 180° vision that sees everything around it.
+> Built in Rust 🦀. Lightweight. Fast.
 
 ---
 
@@ -83,46 +86,15 @@ $ tsr config cursor --edit   # open config in $EDITOR
 $ tsr ping <name>            # ping a server
 ```
 
-> Full command implementations are in progress.
-
 ---
 
-## Building from Source
+## 🤝 Community
 
-### Prerequisites
+Join our community to get help, share ideas, and stay updated:
 
-- [Rust](https://rustup.rs) (1.77+)
-- [Node.js](https://nodejs.org) (20+)
-- [pnpm](https://pnpm.io)
-- Tauri v2 system dependencies — see [Tauri prerequisites](https://v2.tauri.app/start/prerequisites/)
-
-### Steps
-
-```bash
-git clone https://github.com/mcp360/mTarsier.git
-cd mTarsier
-pnpm install
-
-# Prepare the tsr sidecar binary (required once before dev)
-cd src-tauri && bash scripts/prepare-sidecar.sh && cd ..
-
-pnpm tauri dev    # development
-pnpm tauri build  # production
-```
-
----
-
-## Tech Stack
-
-| Layer | Technology |
-|---|---|
-| Desktop framework | Tauri v2 |
-| Frontend | React 19 + TypeScript |
-| Styling | Tailwind CSS v4 |
-| State | Zustand |
-| Build | Vite |
-| Backend | Rust |
-| CLI | `tsr` (Rust + clap) |
+- 💬 [Discord Community](https://discord.gg/Nq5vyrbm)
+- 🐦 Follow us on X — [@0fficialRohit](https://x.com/0fficialRohit) · [@rege_dev](https://x.com/rege_dev)
+- ⭐ [Star us on GitHub](https://github.com/mcp360/mTarsier)
 
 ---
 
