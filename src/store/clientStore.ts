@@ -28,6 +28,7 @@ export const useClientStore = create<ClientStore>((set, get) => ({
   selectClient: (id) => set({ selectedClientId: id }),
 
   detectAll: async () => {
+    if (get().isDetecting) return;
     set({ isDetecting: true });
     try {
       const requests: DetectionRequest[] = CLIENT_REGISTRY.filter(

@@ -172,8 +172,7 @@ fn count_servers(config_path: &str, config_key: &str) -> Option<u32> {
     Some(servers.as_object()?.len() as u32)
 }
 
-#[tauri::command]
-pub fn detect_installed_clients(clients: Vec<DetectionRequest>) -> Vec<DetectionResult> {
+pub fn detect_installed_clients_sync(clients: Vec<DetectionRequest>) -> Vec<DetectionResult> {
     clients
         .iter()
         .map(|req| {
@@ -224,6 +223,13 @@ pub fn detect_installed_clients(clients: Vec<DetectionRequest>) -> Vec<Detection
             }
         })
         .collect()
+}
+
+#[tauri::command]
+pub async fn detect_installed_clients(clients: Vec<DetectionRequest>) -> Vec<DetectionResult> {
+    tauri::async_runtime::spawn_blocking(move || detect_installed_clients_sync(clients))
+        .await
+        .unwrap_or_default()
 }
 
 #[tauri::command]

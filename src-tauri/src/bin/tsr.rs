@@ -2,7 +2,7 @@ use clap::{Parser, Subcommand};
 use std::collections::HashMap;
 use std::process;
 
-use app_lib::commands::clients::{detect_installed_clients, read_mcp_servers, DetectionRequest};
+use app_lib::commands::clients::{detect_installed_clients_sync, read_mcp_servers, DetectionRequest};
 use app_lib::commands::server::{read_store, write_store, ServerEntry};
 use app_lib::commands::utils::{ensure_json_path, expand_config_key, expand_tilde};
 use app_lib::marketplace::{find_server, MARKETPLACE};
@@ -157,7 +157,7 @@ fn cmd_clients(json: bool) {
         })
         .collect();
 
-    let results = detect_installed_clients(requests);
+    let results = detect_installed_clients_sync(requests);
 
     if json {
         let json_arr: Vec<serde_json::Value> = results
