@@ -4,5 +4,6 @@ pub mod clients;
 pub mod config;
 pub mod io;
 pub mod server;
+pub mod tray;
 pub mod updater;
 pub mod utils;

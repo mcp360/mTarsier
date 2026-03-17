@@ -1,6 +1,7 @@
 import React, { useEffect } from "react";
 import { Outlet } from "react-router-dom";
 import { getCurrentWindow } from "@tauri-apps/api/window";
+import { invoke } from "@tauri-apps/api/core";
 import Sidebar from "../components/Sidebar";
 import { useClientDetection } from "../hooks/useClientDetection";
 import { useClientStore } from "../store/clientStore";
@@ -9,10 +10,23 @@ function AppLayout() {
   useClientDetection();
 
   const detectAll = useClientStore((s) => s.detectAll);
+  const clients = useClientStore((s) => s.clients);
+  const isDetecting = useClientStore((s) => s.isDetecting);
 
   useEffect(() => {
     getCurrentWindow().setTitle("");
   }, []);
+
+  useEffect(() => {
+    if (isDetecting) return;
+    const totalServers = clients.reduce((sum, c) => sum + (c.serverCount ?? 0), 0);
+    const activeClients = clients.filter((c) => c.installed && (c.serverCount ?? 0) > 0).length;
+    const tooltip =
+      totalServers > 0
+        ? `mTarsier \u2014 ${totalServers} server${totalServers !== 1 ? "s" : ""} across ${activeClients} client${activeClients !== 1 ? "s" : ""}`
+        : "mTarsier \u2014 MCP Server Manager";
+    invoke("update_tray_tooltip", { tooltip }).catch(() => {});
+  }, [isDetecting, clients]);
 
   useEffect(() => {
     let debounceTimer: ReturnType<typeof setTimeout> | null = null;
