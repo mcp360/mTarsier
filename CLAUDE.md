@@ -9,3 +9,4 @@ See [AGENTS.md](./AGENTS.md) for full project guide, architecture, conventions, 
 - Do not add a new Tauri command without registering it in both `commands/mod.rs` and `lib.rs`
 - Keep React components under 150 lines
 - `src-tauri/binaries/` is gitignored — never commit compiled binaries
+- Branch names must follow `<type>/<description>` — see AGENTS.md for the full prefix list (`feature/`, `fix/`, `perf/`, `refactor/`, `chore/`, `docs/`, `test/`, `release/`)

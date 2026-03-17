@@ -103,6 +103,35 @@ APPLE_SIGNING_IDENTITY="Developer ID Application: ..." pnpm release:signed
 - Builds for: macOS (aarch64 + x86_64), Windows (NSIS), Linux (AppImage + deb + rpm)
 - macOS builds are signed and notarized automatically via secrets
 
+## Git Conventions
+
+### Branch Naming
+
+Always use the format `<type>/<short-description>` with lowercase kebab-case:
+
+| Prefix | When to use | Example |
+|---|---|---|
+| `feature/` | New functionality | `feature/marketplace-search` |
+| `fix/` | Bug fixes | `fix/client-detection-crash` |
+| `perf/` | Performance improvements | `perf/async-client-detection` |
+| `refactor/` | Code restructuring, no behavior change | `refactor/extract-auth-section` |
+| `chore/` | Tooling, deps, config, CI | `chore/update-tauri-2.5` |
+| `docs/` | Documentation only | `docs/cli-usage-guide` |
+| `test/` | Tests only | `test/client-store-unit` |
+| `release/` | Release prep / version bumps | `release/v1.1.0` |
+
+### Commit Messages
+
+Follow [Conventional Commits](https://www.conventionalcommits.org/):
+```
+<type>(<optional scope>): <short description>
+
+feat(marketplace): add server search filtering
+fix(clients): prevent concurrent detection calls
+perf(clients): offload detection to spawn_blocking
+chore: update Cargo dependencies
+```
+
 ## Common Pitfalls
 
 - `src-tauri/binaries/` is gitignored — run `prepare-sidecar.sh` after cloning
