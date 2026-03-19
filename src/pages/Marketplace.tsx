@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { open } from "@tauri-apps/plugin-shell";
 import { cn } from "../lib/utils";
 import { useClientStore } from "../store/clientStore";
@@ -8,6 +8,7 @@ import { type McpCategory, type MarketplaceServer } from "../data/marketplace";
 import MarketplaceServerCard from "../components/marketplace/MarketplaceServerCard";
 import InstallMcpDialog from "../components/marketplace/InstallMcpDialog";
 import UninstallMcpDialog from "../components/marketplace/UninstallMcpDialog";
+import BulkInstallDialog from "../components/marketplace/BulkInstallDialog";
 import VideoModal from "../components/marketplace/VideoModal";
 
 function Marketplace() {
@@ -18,10 +19,17 @@ function Marketplace() {
   const [uninstalling, setUninstalling] = useState<MarketplaceServer | null>(null);
   const [watchingVideos, setWatchingVideos] = useState<MarketplaceServer | null>(null);
   const [toast, setToast] = useState<string | null>(null);
+  const [selectionMode, setSelectionMode] = useState(false);
+  const [selectedServerIds, setSelectedServerIds] = useState<Set<string>>(new Set());
+  const [bulkInstalling, setBulkInstalling] = useState(false);
 
   const [refreshKey, setRefreshKey] = useState(0);
 
-  const { clients } = useClientStore();
+  const { clients, detectAll } = useClientStore();
+
+  useEffect(() => {
+    detectAll();
+  }, []);
   const { servers: MARKETPLACE_SERVERS, categories: CATEGORIES } = useMarketplace();
   const installMap = useMarketplaceInstalls(clients, refreshKey);
 
@@ -50,12 +58,34 @@ function Marketplace() {
     ? filteredServers
     : filteredServers.filter((s) => !s.featured);
 
-  const handleSuccess = (clientName: string) => {
+  const handleSuccess = (clientNames: string[], mode: "install" | "remove") => {
     const name = installing?.name ?? "Server";
     setInstalling(null);
     setRefreshKey((k) => k + 1);
-    setToast(`${name} installed to ${clientName}`);
+    const label = clientNames.length === 1 ? clientNames[0] : `${clientNames.length} clients`;
+    setToast(mode === "remove" ? `${name} removed from ${label}` : `${name} installed to ${label}`);
     setTimeout(() => setToast(null), 3500);
+  };
+
+  // Only refresh + show toast — keep dialog open so user can see results
+  const handleBulkSuccess = (summary: string) => {
+    setRefreshKey((k) => k + 1);
+    setToast(summary);
+    setTimeout(() => setToast(null), 3500);
+  };
+
+  const toggleServerSelection = (id: string) => {
+    setSelectedServerIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const exitSelectionMode = () => {
+    setSelectionMode(false);
+    setSelectedServerIds(new Set());
   };
 
   const handleUninstallSuccess = (clientName: string) => {
@@ -69,11 +99,24 @@ function Marketplace() {
   return (
     <div className="flex-1 overflow-auto p-6">
       {/* Header */}
-      <div className="mb-5">
-        <h1 className="text-lg font-bold">Marketplace</h1>
-        <p className="text-xs text-text-muted mt-0.5">
-          Discover and install MCP servers
-        </p>
+      <div className="mb-5 flex items-start justify-between gap-4">
+        <div>
+          <h1 className="text-lg font-bold">Marketplace</h1>
+          <p className="text-xs text-text-muted mt-0.5">
+            Discover and install MCP servers
+          </p>
+        </div>
+        <button
+          onClick={() => selectionMode ? exitSelectionMode() : setSelectionMode(true)}
+          className={cn(
+            "flex-shrink-0 text-xs px-2.5 py-1.5 rounded-md border transition-colors mt-0.5",
+            selectionMode
+              ? "bg-primary/10 text-primary border-primary/30 hover:bg-primary/15"
+              : "text-text-muted border-border hover:border-border-hover hover:text-text"
+          )}
+        >
+          {selectionMode ? "Cancel" : "Select"}
+        </button>
       </div>
 
       {/* Search */}
@@ -154,6 +197,9 @@ function Marketplace() {
                 onInstall={() => setInstalling(server)}
                 onUninstall={() => setUninstalling(server)}
                 onWatchVideos={() => setWatchingVideos(server)}
+                selectionMode={selectionMode}
+                selected={selectedServerIds.has(server.id)}
+                onToggleSelect={() => toggleServerSelection(server.id)}
               />
             ))}
           </div>
@@ -214,6 +260,9 @@ function Marketplace() {
                 onInstall={() => setInstalling(server)}
                 onUninstall={() => setUninstalling(server)}
                 onWatchVideos={() => setWatchingVideos(server)}
+                selectionMode={selectionMode}
+                selected={selectedServerIds.has(server.id)}
+                onToggleSelect={() => toggleServerSelection(server.id)}
               />
             ))}
           </div>
@@ -237,6 +286,27 @@ function Marketplace() {
             />
           </svg>
           {toast}
+        </div>
+      )}
+
+      {/* Bulk selection action bar */}
+      {selectionMode && selectedServerIds.size > 0 && (
+        <div className="fixed bottom-5 left-1/2 -translate-x-1/2 z-40 flex items-center gap-3 bg-surface border border-primary/30 rounded-lg px-4 py-2.5 shadow-2xl">
+          <span className="text-xs text-text-muted">
+            <span className="text-primary font-semibold">{selectedServerIds.size}</span> server{selectedServerIds.size !== 1 ? "s" : ""} selected
+          </span>
+          <button
+            onClick={() => setSelectedServerIds(new Set())}
+            className="text-xs text-text-muted hover:text-text transition-colors"
+          >
+            Clear
+          </button>
+          <button
+            onClick={() => setBulkInstalling(true)}
+            className="text-xs font-medium px-3 py-1 rounded-md bg-primary text-base hover:bg-primary-dim transition-colors"
+          >
+            Install Selected
+          </button>
         </div>
       )}
 
@@ -266,6 +336,15 @@ function Marketplace() {
           installedIn={installMap.get(uninstalling.id) ?? []}
           onClose={() => setUninstalling(null)}
           onSuccess={handleUninstallSuccess}
+        />
+      )}
+
+      {/* Bulk install dialog */}
+      {bulkInstalling && (
+        <BulkInstallDialog
+          servers={MARKETPLACE_SERVERS.filter((s) => selectedServerIds.has(s.id))}
+          onClose={() => { setBulkInstalling(false); exitSelectionMode(); }}
+          onSuccess={handleBulkSuccess}
         />
       )}
     </div>

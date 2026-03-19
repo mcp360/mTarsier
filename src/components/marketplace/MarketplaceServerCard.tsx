@@ -43,6 +43,7 @@ function commandPreview(server: MarketplaceServer): string {
 
 /** Detect whether the server runs locally (stdio) or via remote proxy. */
 function transportLabel(server: MarketplaceServer): string {
+  if (server.remoteUrl) return "remote";
   const usesRemote = server.args.some(
     (a) => a.includes("mcp-remote") || a.startsWith("http")
   );
@@ -63,9 +64,12 @@ interface Props {
   onInstall: () => void;
   onUninstall: () => void;
   onWatchVideos?: () => void;
+  selectionMode?: boolean;
+  selected?: boolean;
+  onToggleSelect?: () => void;
 }
 
-function MarketplaceServerCard({ server, featured, installedIn, onInstall, onUninstall, onWatchVideos }: Props) {
+function MarketplaceServerCard({ server, featured, installedIn, onInstall, onUninstall, onWatchVideos, selectionMode, selected, onToggleSelect }: Props) {
   const styles = CATEGORY_STYLES[server.category];
   const isInstalled = installedIn.length > 0;
   const transport = transportLabel(server);
@@ -74,12 +78,33 @@ function MarketplaceServerCard({ server, featured, installedIn, onInstall, onUni
 
   return (
     <div
+      onClick={selectionMode ? onToggleSelect : undefined}
       className={cn(
-        "relative flex flex-col bg-surface border border-border rounded-lg hover:border-border-hover transition-colors",
-        featured ? "p-5" : "p-4"
+        "relative flex flex-col bg-surface border rounded-lg transition-colors",
+        featured ? "p-5" : "p-4",
+        selectionMode
+          ? selected
+            ? "border-primary bg-primary/5 cursor-pointer"
+            : "border-border hover:border-primary/40 cursor-pointer"
+          : "border-border hover:border-border-hover"
       )}
     >
-      {isInstalled && (
+      {/* Checkbox overlay in selection mode */}
+      {selectionMode && (
+        <div
+          className={cn(
+            "absolute top-2.5 left-2.5 w-4 h-4 rounded border-2 flex items-center justify-center transition-colors",
+            selected ? "border-primary bg-primary" : "border-text-muted/40 bg-surface"
+          )}
+        >
+          {selected && (
+            <svg className="w-2.5 h-2.5 text-base" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+            </svg>
+          )}
+        </div>
+      )}
+      {isInstalled && !selectionMode && (
         <button
           onClick={onUninstall}
           title={`Installed in: ${installedIn.join(", ")} — click to manage`}
@@ -89,7 +114,7 @@ function MarketplaceServerCard({ server, featured, installedIn, onInstall, onUni
         </button>
       )}
       {/* Header */}
-      <div className="flex items-start gap-3 mb-3">
+      <div className={cn("flex items-start gap-3 mb-3", selectionMode && "pl-6")}>
         <div
           className={cn(
             "flex-shrink-0 flex items-center justify-center rounded-lg font-bold",
@@ -185,13 +210,15 @@ function MarketplaceServerCard({ server, featured, installedIn, onInstall, onUni
           </button>
         )}
 
-        <button
-          onClick={onInstall}
-          title="Install to a client"
-          className="text-[10px] font-medium px-2 py-0.5 rounded border transition-colors border-primary/30 text-primary/80 hover:border-primary hover:text-primary focus:outline-none cursor-pointer ml-auto flex-shrink-0"
-        >
-          Install
-        </button>
+        {!selectionMode && (
+          <button
+            onClick={onInstall}
+            title="Install to a client"
+            className="text-[10px] font-medium px-2 py-0.5 rounded border transition-colors border-primary/30 text-primary/80 hover:border-primary hover:text-primary focus:outline-none cursor-pointer ml-auto flex-shrink-0"
+          >
+            Install
+          </button>
+        )}
       </div>
     </div>
   );

@@ -12,14 +12,26 @@ function Config() {
   const [searchParams] = useSearchParams();
   const {
     selectedClient,
+    selectedClientId,
     mode,
     isLoading,
     error,
     rawContent,
     showBackupPanel,
     setSelectedClient,
+    loadConfig,
     createDefaultConfig,
   } = useConfigStore();
+
+  // Reload config from disk every time the Config page mounts (e.g. returning from another tab).
+  // Intentional empty deps — we only want this on mount, not on every selectedClientId change
+  // (setSelectedClient already calls loadConfig for explicit client switches).
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    if (selectedClientId) {
+      loadConfig(selectedClientId);
+    }
+  }, []);
 
   const appliedParam = useRef(false);
   useEffect(() => {
