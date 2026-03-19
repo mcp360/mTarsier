@@ -2111,7 +2111,7 @@ dependencies = [
 
 [[package]]
 name = "mtarsier"
-version = "0.1.9"
+version = "1.0.1"
 dependencies = [
  "chrono",
  "clap",

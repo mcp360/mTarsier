@@ -11,6 +11,7 @@
     "core:window:allow-set-title",
     "shell:allow-open",
     "dialog:allow-open",
-    "dialog:allow-save"
+    "dialog:allow-save",
+    "core:tray:default"
   ]
 }

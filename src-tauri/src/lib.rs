@@ -1,8 +1,10 @@
 pub mod commands;
 pub mod marketplace;
 pub mod registry;
+pub mod tray;
 
 use std::sync::Mutex;
+use tauri::Manager;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -36,6 +38,7 @@ pub fn run() {
       commands::server::write_mtarsier_store,
       commands::updater::check_for_update,
       commands::updater::install_update,
+      commands::tray::update_tray_tooltip,
     ])
     .plugin(tauri_plugin_updater::Builder::new().build())
     .plugin(tauri_plugin_dialog::init())
@@ -48,6 +51,26 @@ pub fn run() {
             .build(),
         )?;
       }
+
+      // Setup macOS menu bar icon
+      tray::setup_tray(app)?;
+
+      // macOS convention: red-X hides window instead of quitting
+      #[cfg(target_os = "macos")]
+      {
+        if let Some(main_win) = app.get_webview_window("main") {
+          let app_handle = app.handle().clone();
+          main_win.on_window_event(move |event: &tauri::WindowEvent| {
+            if let tauri::WindowEvent::CloseRequested { api, .. } = event {
+              api.prevent_close();
+              if let Some(w) = app_handle.get_webview_window("main") {
+                w.hide().ok();
+              }
+            }
+          });
+        }
+      }
+
       Ok(())
     })
     .run(tauri::generate_context!())
