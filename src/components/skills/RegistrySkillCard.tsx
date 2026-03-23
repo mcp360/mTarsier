@@ -8,7 +8,7 @@ export interface SkillSearchResult {
 interface Props {
   skill: SkillSearchResult;
   installing: boolean;
-  onInstall: (id: string) => void;
+  onInstall: (skill: SkillSearchResult) => void;
 }
 
 export default function RegistrySkillCard({ skill, installing, onInstall }: Props) {
@@ -38,11 +38,11 @@ export default function RegistrySkillCard({ skill, installing, onInstall }: Prop
       <p className="text-[10px] font-mono text-text-muted/40 truncate">{skill.id}</p>
 
       <button
-        onClick={() => onInstall(skill.id)}
+        onClick={() => onInstall(skill)}
         disabled={installing}
         className="mt-auto text-[11px] font-medium px-2.5 py-1.5 rounded-md border border-primary/30 bg-primary/10 text-primary hover:bg-primary/15 hover:border-primary/50 disabled:opacity-50 transition-colors"
       >
-        {installing ? "Installing…" : "Install globally"}
+        {installing ? "Installing…" : "Install"}
       </button>
     </div>
   );

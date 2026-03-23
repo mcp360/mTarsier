@@ -1,10 +1,11 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { cn } from "../lib/utils";
 import { useSkillStore, getSkillableClients } from "../store/skillStore";
 import type { InstalledSkill } from "../store/skillStore";
 import SkillCard from "../components/skills/SkillCard";
 import CopySkillDialog from "../components/skills/CopySkillDialog";
+import InstallSkillDialog from "../components/skills/InstallSkillDialog";
 import RegistrySkillCard from "../components/skills/RegistrySkillCard";
 import type { SkillSearchResult } from "../components/skills/RegistrySkillCard";
 
@@ -154,16 +155,18 @@ function DiscoverTab({ onInstalled }: { onInstalled: (name: string) => void }) {
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<SkillSearchResult[]>([]);
   const [searching, setSearching] = useState(false);
+  const [pendingInstall, setPendingInstall] = useState<SkillSearchResult | null>(null);
   const [installingSource, setInstallingSource] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const search = async () => {
-    if (query.trim().length < 2) return;
+  const runSearch = async (q: string) => {
+    if (q.trim().length < 2) { setResults([]); return; }
     setSearching(true);
     setError(null);
     try {
-      const results = await invoke<SkillSearchResult[]>("skills_search", { query: query.trim() });
-      setResults(results);
+      const res = await invoke<SkillSearchResult[]>("skills_search", { query: q.trim() });
+      setResults(res);
     } catch (e) {
       setError(String(e));
     } finally {
@@ -171,13 +174,20 @@ function DiscoverTab({ onInstalled }: { onInstalled: (name: string) => void }) {
     }
   };
 
-  const handleInstall = async (source: string) => {
+  useEffect(() => {
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    if (query.trim().length < 2) { setResults([]); return; }
+    debounceRef.current = setTimeout(() => runSearch(query), 400);
+    return () => { if (debounceRef.current) clearTimeout(debounceRef.current); };
+  }, [query]);
+
+  const handleInstallConfirm = async (_clientIds: string[]) => {
+    if (!pendingInstall) return;
+    const source = pendingInstall.source ?? pendingInstall.id;
     setInstallingSource(source);
     try {
       await invoke("skills_install", { source });
-      onInstalled(source.split("@").pop() ?? source);
-    } catch (e) {
-      setError(String(e));
+      onInstalled(pendingInstall.name);
     } finally {
       setInstallingSource(null);
     }
@@ -185,35 +195,20 @@ function DiscoverTab({ onInstalled }: { onInstalled: (name: string) => void }) {
 
   return (
     <div>
-      <div className="flex gap-2 mb-5">
-        <div className="relative flex-1">
-          <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-text-muted pointer-events-none" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-            <circle cx="11" cy="11" r="8" /><path d="m21 21-4.35-4.35" strokeLinecap="round" />
-          </svg>
-          <input
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            onKeyDown={(e) => e.key === "Enter" && search()}
-            placeholder="Search skills registry (e.g. react, git, debug)…"
-            className="w-full pl-9 pr-3 py-2 text-xs bg-surface border border-border rounded-lg text-text placeholder:text-text-muted/50 focus:outline-none focus:border-primary/40"
-          />
-        </div>
-        <button
-          onClick={search}
-          disabled={searching || query.trim().length < 2}
-          className="flex items-center gap-1.5 text-xs font-medium px-3 py-2 rounded-lg bg-primary/10 border border-primary/30 text-primary hover:bg-primary/15 disabled:opacity-40 transition-colors flex-shrink-0"
-        >
-          {searching ? (
-            <div className="w-3 h-3 border border-primary/40 border-t-primary rounded-full animate-spin" />
-          ) : (
-            <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <circle cx="11" cy="11" r="8" /><path d="m21 21-4.35-4.35" strokeLinecap="round" />
-            </svg>
-          )}
-          {searching ? "Searching…" : "Search"}
-        </button>
-      </div>
-      <div className="hidden">{/* placeholder to maintain structure */}
+      <div className="relative mb-5">
+        <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-text-muted pointer-events-none" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+          <circle cx="11" cy="11" r="8" /><path d="m21 21-4.35-4.35" strokeLinecap="round" />
+        </svg>
+        {searching && (
+          <div className="absolute right-3 top-1/2 -translate-y-1/2 w-3 h-3 border border-primary/40 border-t-primary rounded-full animate-spin" />
+        )}
+        <input
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          onKeyDown={(e) => { if (e.key === "Enter") { if (debounceRef.current) clearTimeout(debounceRef.current); runSearch(query); } }}
+          placeholder="Search skills registry (e.g. react, git, debug)…"
+          className="w-full pl-9 pr-8 py-2 text-xs bg-surface border border-border rounded-lg text-text placeholder:text-text-muted/50 focus:outline-none focus:border-primary/40"
+        />
       </div>
 
       {error && <p className="text-[11px] text-red-400 mb-4">{error}</p>}
@@ -230,12 +225,20 @@ function DiscoverTab({ onInstalled }: { onInstalled: (name: string) => void }) {
       ) : (
         <div className="grid grid-cols-3 gap-3">
           {results.map((s) => (
-            <RegistrySkillCard key={s.source} skill={s}
-              installing={installingSource === s.source}
-              onInstall={handleInstall}
+            <RegistrySkillCard key={s.source ?? s.id} skill={s}
+              installing={installingSource === (s.source ?? s.id)}
+              onInstall={setPendingInstall}
             />
           ))}
         </div>
+      )}
+
+      {pendingInstall && (
+        <InstallSkillDialog
+          skill={pendingInstall}
+          onClose={() => setPendingInstall(null)}
+          onInstall={handleInstallConfirm}
+        />
       )}
     </div>
   );
