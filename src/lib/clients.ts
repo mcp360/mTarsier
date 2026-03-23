@@ -29,6 +29,8 @@ export const CLIENT_REGISTRY: ClientMeta[] = [
     supportsScopes: true,
     detection: { kind: "cli_binary", name: "claude" },
     supportedTransports: ["stdio", "sse", "streamable-http"],
+    supportsSkills: true,
+    skillsPath: "~/.claude/skills",
   },
   {
     id: "claude-web",
@@ -181,6 +183,8 @@ export const CLIENT_REGISTRY: ClientMeta[] = [
     configFormat: "json",
     detection: { kind: "app_bundle", path: "/Applications/Cursor.app", pathWin: "%LOCALAPPDATA%\\Programs\\cursor\\Cursor.exe", pathLinux: "/usr/bin/cursor" },
     supportedTransports: ["stdio", "sse", "streamable-http"],
+    supportsSkills: true,
+    skillsPath: "~/.cursor/skills",
   },
   {
     id: "windsurf",
@@ -194,6 +198,8 @@ export const CLIENT_REGISTRY: ClientMeta[] = [
     configFormat: "json",
     detection: { kind: "app_bundle", path: "/Applications/Windsurf.app", pathWin: "%LOCALAPPDATA%\\Programs\\Windsurf\\Windsurf.exe", pathLinux: "/usr/bin/windsurf" },
     supportedTransports: ["stdio", "sse", "streamable-http"],
+    supportsSkills: true,
+    skillsPath: "~/.codeium/windsurf/skills",
   },
   {
     id: "github-copilot",
@@ -207,6 +213,8 @@ export const CLIENT_REGISTRY: ClientMeta[] = [
     configFormat: "json",
     detection: { kind: "vscode_extension", id: "github.copilot-chat" },
     supportedTransports: ["stdio", "sse", "streamable-http"],
+    supportsSkills: true,
+    skillsPath: "~/.copilot/skills",
   },
   {
     id: "opencode",
@@ -246,6 +254,8 @@ export const CLIENT_REGISTRY: ClientMeta[] = [
     configFormat: "json",
     detection: { kind: "cli_binary", name: "copilot" },
     supportedTransports: ["stdio", "sse", "streamable-http"],
+    supportsSkills: true,
+    skillsPath: "~/.copilot/skills",
   },
 ];
 

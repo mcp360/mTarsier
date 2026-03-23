@@ -4,6 +4,7 @@ import {
   Settings2,
   ClipboardList,
   Store,
+  Zap,
   SlidersHorizontal,
   Info,
 } from "lucide-react";
@@ -20,6 +21,7 @@ const mainNav = [
 const toolsNav = [
   { to: "/audit", label: "Audit Logs", icon: <ClipboardList size={16} /> },
   { to: "/marketplace", label: "Marketplace", icon: <Store size={16} /> },
+  { to: "/skills", label: "Skills", icon: <Zap size={16} /> },
 ];
 
 const bottomNav = [

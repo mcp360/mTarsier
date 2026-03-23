@@ -27,6 +27,10 @@ export interface ClientMeta {
   supportsScopes?: boolean;
   /** Step-by-step guide shown for web/remote clients that have no local config. */
   setupSteps?: Array<{ text: string; note?: string }>;
+  /** True when the client supports the agentskills.io Skills standard. */
+  supportsSkills?: boolean;
+  /** Global skills directory path, e.g. ~/.claude/skills */
+  skillsPath?: string;
 }
 
 export interface ClientState {
