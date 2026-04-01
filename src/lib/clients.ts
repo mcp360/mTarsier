@@ -14,6 +14,8 @@ export const CLIENT_REGISTRY: ClientMeta[] = [
     configFormat: "json",
     detection: { kind: "app_bundle", path: "/Applications/Claude.app", pathWin: "%LOCALAPPDATA%\\Microsoft\\WindowsApps\\Claude.exe" },
     supportedTransports: ["stdio", "remote-mcp"],
+    supportsSkills: true,
+    skillsPath: "~/Library/Application Support/Claude/skills",
   },
   {
     id: "claude-code",
@@ -29,6 +31,8 @@ export const CLIENT_REGISTRY: ClientMeta[] = [
     supportsScopes: true,
     detection: { kind: "cli_binary", name: "claude" },
     supportedTransports: ["stdio", "sse", "streamable-http"],
+    supportsSkills: true,
+    skillsPath: "~/.claude/skills",
   },
   {
     id: "claude-web",
@@ -42,6 +46,7 @@ export const CLIENT_REGISTRY: ClientMeta[] = [
     configFormat: "json",
     detection: { kind: "none" },
     supportedTransports: ["sse", "streamable-http"],
+    supportsSkills: true,
     setupSteps: [
       { text: "Open claude.ai and sign in to your account." },
       { text: "Click your profile icon → Settings → Connectors." },
@@ -135,6 +140,8 @@ export const CLIENT_REGISTRY: ClientMeta[] = [
     isSharedFile: true,
     detection: { kind: "cli_binary", name: "codex" },
     supportedTransports: ["stdio", "remote-mcp"],
+    supportsSkills: true,
+    skillsPath: "~/.codex/skills",
   },
 
   // ── Google ───────────────────────────────────────────────────────────────
@@ -151,6 +158,8 @@ export const CLIENT_REGISTRY: ClientMeta[] = [
     isSharedFile: true,
     detection: { kind: "cli_binary", name: "gemini" },
     supportedTransports: ["stdio", "sse", "streamable-http"],
+    supportsSkills: true,
+    skillsPath: "~/.gemini/skills",
   },
   // ── OpenClaw ─────────────────────────────────────────────────────────────
   {
@@ -181,6 +190,8 @@ export const CLIENT_REGISTRY: ClientMeta[] = [
     configFormat: "json",
     detection: { kind: "app_bundle", path: "/Applications/Cursor.app", pathWin: "%LOCALAPPDATA%\\Programs\\cursor\\Cursor.exe", pathLinux: "/usr/bin/cursor" },
     supportedTransports: ["stdio", "sse", "streamable-http"],
+    supportsSkills: true,
+    skillsPath: "~/.cursor/skills",
   },
   {
     id: "windsurf",
@@ -194,6 +205,8 @@ export const CLIENT_REGISTRY: ClientMeta[] = [
     configFormat: "json",
     detection: { kind: "app_bundle", path: "/Applications/Windsurf.app", pathWin: "%LOCALAPPDATA%\\Programs\\Windsurf\\Windsurf.exe", pathLinux: "/usr/bin/windsurf" },
     supportedTransports: ["stdio", "sse", "streamable-http"],
+    supportsSkills: true,
+    skillsPath: "~/.codeium/windsurf/skills",
   },
   {
     id: "github-copilot",
@@ -207,6 +220,8 @@ export const CLIENT_REGISTRY: ClientMeta[] = [
     configFormat: "json",
     detection: { kind: "vscode_extension", id: "github.copilot-chat" },
     supportedTransports: ["stdio", "sse", "streamable-http"],
+    supportsSkills: true,
+    skillsPath: "~/.copilot/skills",
   },
   {
     id: "opencode",
@@ -220,6 +235,8 @@ export const CLIENT_REGISTRY: ClientMeta[] = [
     configFormat: "json-opencode",
     detection: { kind: "cli_binary", name: "opencode" },
     supportedTransports: ["stdio", "sse", "remote-mcp"],
+    supportsSkills: true,
+    skillsPath: "~/.agents/skills",
   },
   {
     id: "antigravity",
@@ -233,6 +250,8 @@ export const CLIENT_REGISTRY: ClientMeta[] = [
     configFormat: "json",
     detection: { kind: "app_bundle", path: "/Applications/Antigravity.app", pathLinux: "/usr/bin/antigravity" },
     supportedTransports: ["stdio", "sse", "streamable-http"],
+    supportsSkills: true,
+    skillsPath: "~/.antigravity/skills",
   },
   {
     id: "github-copilot-cli",
@@ -246,6 +265,8 @@ export const CLIENT_REGISTRY: ClientMeta[] = [
     configFormat: "json",
     detection: { kind: "cli_binary", name: "copilot" },
     supportedTransports: ["stdio", "sse", "streamable-http"],
+    supportsSkills: true,
+    skillsPath: "~/.copilot/skills",
   },
 ];
 

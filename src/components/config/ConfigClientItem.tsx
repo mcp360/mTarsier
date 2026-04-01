@@ -5,6 +5,7 @@ interface Props {
   client: ClientMeta;
   isSelected: boolean;
   installed: boolean;
+  subtitle?: string;
   onSelect: () => void;
 }
 
@@ -14,7 +15,7 @@ const typeBadgeColors: Record<string, string> = {
   CLI: "bg-surface-overlay text-text-muted",
 };
 
-function ConfigClientItem({ client, isSelected, installed, onSelect }: Props) {
+function ConfigClientItem({ client, isSelected, installed, subtitle, onSelect }: Props) {
   const [dotHovered, setDotHovered] = useState(false);
 
   return (
@@ -44,6 +45,9 @@ function ConfigClientItem({ client, isSelected, installed, onSelect }: Props) {
             </span>
           )}
         </div>
+        {subtitle && (
+          <p className="mt-0.5 text-[10px] text-text-muted/70 truncate">{subtitle}</p>
+        )}
       </div>
       <span
         className={`flex-shrink-0 text-[10px] px-1.5 py-0.5 rounded font-medium ${

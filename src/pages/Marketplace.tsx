@@ -1,17 +1,27 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
+import { invoke } from "@tauri-apps/api/core";
 import { open } from "@tauri-apps/plugin-shell";
 import { cn } from "../lib/utils";
 import { useClientStore } from "../store/clientStore";
 import { useMarketplaceInstalls } from "../hooks/useMarketplaceInstalls";
 import { useMarketplace } from "../hooks/useMarketplace";
 import { type McpCategory, type MarketplaceServer } from "../data/marketplace";
+import { getSkillableClients } from "../store/skillStore";
 import MarketplaceServerCard from "../components/marketplace/MarketplaceServerCard";
 import InstallMcpDialog from "../components/marketplace/InstallMcpDialog";
 import UninstallMcpDialog from "../components/marketplace/UninstallMcpDialog";
 import BulkInstallDialog from "../components/marketplace/BulkInstallDialog";
 import VideoModal from "../components/marketplace/VideoModal";
+import RegistrySkillCard from "../components/skills/RegistrySkillCard";
+import InstallSkillDialog from "../components/skills/InstallSkillDialog";
+import SkillCard from "../components/skills/SkillCard";
+import type { SkillSearchResult } from "../components/skills/RegistrySkillCard";
+import type { InstalledSkill } from "../store/skillStore";
+
+type MarketplaceTab = "mcp" | "skills";
 
 function Marketplace() {
+  const [tab, setTab] = useState<MarketplaceTab>("mcp");
   const [search, setSearch] = useState("");
   const [activeCategory, setActiveCategory] = useState<McpCategory | "All">("All");
   const [featuredOffset, setFeaturedOffset] = useState(0);
@@ -96,28 +106,51 @@ function Marketplace() {
     setTimeout(() => setToast(null), 3500);
   };
 
+  const showToast = (msg: string) => {
+    setToast(msg);
+    setTimeout(() => setToast(null), 3500);
+  };
+
   return (
     <div className="flex-1 overflow-auto p-6">
       {/* Header */}
-      <div className="mb-5 flex items-start justify-between gap-4">
-        <div>
-          <h1 className="text-lg font-bold">Marketplace</h1>
-          <p className="text-xs text-text-muted mt-0.5">
-            Discover and install MCP servers
-          </p>
-        </div>
-        <button
-          onClick={() => selectionMode ? exitSelectionMode() : setSelectionMode(true)}
-          className={cn(
-            "flex-shrink-0 text-xs px-2.5 py-1.5 rounded-md border transition-colors mt-0.5",
-            selectionMode
-              ? "bg-primary/10 text-primary border-primary/30 hover:bg-primary/15"
-              : "text-text-muted border-border hover:border-border-hover hover:text-text"
-          )}
-        >
-          {selectionMode ? "Cancel" : "Select"}
-        </button>
+      <div className="mb-5">
+        <h1 className="text-lg font-bold">Marketplace</h1>
+        <p className="text-xs text-text-muted mt-0.5">
+          Discover and install MCP servers and Skills
+        </p>
       </div>
+
+      {/* Tabs */}
+      <div className="flex gap-1 mb-6 border-b border-border">
+        {(["mcp", "skills"] as MarketplaceTab[]).map((t) => (
+          <button key={t} onClick={() => setTab(t)}
+            className={cn("text-xs px-3 py-2 border-b-2 -mb-px transition-colors capitalize",
+              tab === t ? "border-primary text-primary" : "border-transparent text-text-muted hover:text-text"
+            )}>{t === "mcp" ? "MCP Servers" : "Skills"}</button>
+        ))}
+      </div>
+
+      {tab === "mcp" && (
+        <div>
+          <div className="mb-5 flex items-start justify-between gap-4">
+            <div>
+              <p className="text-xs text-text-muted">
+                Model Context Protocol integrations
+              </p>
+            </div>
+            <button
+              onClick={() => selectionMode ? exitSelectionMode() : setSelectionMode(true)}
+              className={cn(
+                "flex-shrink-0 text-xs px-2.5 py-1.5 rounded-md border transition-colors",
+                selectionMode
+                  ? "bg-primary/10 text-primary border-primary/30 hover:bg-primary/15"
+                  : "text-text-muted border-border hover:border-border-hover hover:text-text"
+              )}
+            >
+              {selectionMode ? "Cancel" : "Select"}
+            </button>
+          </div>
 
       {/* Search */}
       <div className="relative mb-4">
@@ -268,6 +301,12 @@ function Marketplace() {
           </div>
         )}
       </div>
+        </div>
+      )}
+
+      {tab === "skills" && (
+        <SkillsDiscoverSection showToast={showToast} />
+      )}
 
       {/* Success toast */}
       {toast && (
@@ -345,6 +384,481 @@ function Marketplace() {
           servers={MARKETPLACE_SERVERS.filter((s) => selectedServerIds.has(s.id))}
           onClose={() => { setBulkInstalling(false); exitSelectionMode(); }}
           onSuccess={handleBulkSuccess}
+        />
+      )}
+    </div>
+  );
+}
+
+function SkillsDiscoverSection({ showToast }: { showToast: (msg: string) => void }) {
+  const { clients: clientStates } = useClientStore();
+  const detectedMetas = useMemo(
+    () => clientStates.filter((cs) => cs.installed).map((cs) => cs.meta),
+    [clientStates]
+  );
+  const clients = useMemo(() => getSkillableClients(detectedMetas), [detectedMetas]);
+
+  const [skillsView, setSkillsView] = useState<"discover" | "installed">("discover");
+  const [selectedClientId, setSelectedClientId] = useState<string | "all">("all");
+  const [query, setQuery] = useState("");
+  const [results, setResults] = useState<SkillSearchResult[]>([]);
+  const [searching, setSearching] = useState(false);
+  const [pendingInstall, setPendingInstall] = useState<SkillSearchResult | null>(null);
+  const [installingSource, setInstallingSource] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const searchRequestIdRef = useRef(0);
+  const searchCacheRef = useRef<Map<string, SkillSearchResult[]>>(new Map());
+  const normalizedQuery = query.trim();
+  const hasActiveQuery = normalizedQuery.length >= 2;
+  const waitForNextFrame = () =>
+    new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+
+  // For installed skills
+  const [allSkills, setAllSkills] = useState<Array<InstalledSkill & { clientName: string; clientId: string }>>([]);
+  const [loadingSkills, setLoadingSkills] = useState(false);
+
+  // Load all skills when switching to installed view
+  useEffect(() => {
+    if (skillsView === "installed") {
+      const loadAllSkills = async () => {
+        setLoadingSkills(true);
+        const skillsData: Array<InstalledSkill & { clientName: string; clientId: string }> = [];
+
+        for (const client of clients) {
+          try {
+            const clientSkills = await invoke<InstalledSkill[]>("list_skills", {
+              skillsPath: client.skillsPath,
+            });
+            skillsData.push(...clientSkills.map(skill => ({
+              ...skill,
+              clientName: client.name,
+              clientId: client.id,
+            })));
+          } catch (e) {
+            console.error(`Failed to load skills for ${client.name}:`, e);
+          }
+        }
+
+        setAllSkills(skillsData);
+        setLoadingSkills(false);
+      };
+
+      loadAllSkills();
+    }
+  }, [skillsView, clients]);
+
+  // Filter skills based on selected client
+  const filteredSkills = selectedClientId === "all"
+    ? allSkills
+    : allSkills.filter(skill => skill.clientId === selectedClientId);
+
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      if (debounceRef.current) {
+        clearTimeout(debounceRef.current);
+        debounceRef.current = null;
+      }
+      searchRequestIdRef.current += 1;
+    };
+  }, []);
+
+  const runSearch = async (trimmedQuery: string, requestId: number) => {
+    if (trimmedQuery.length < 2) {
+      if (requestId !== searchRequestIdRef.current) return;
+      setResults([]);
+      setError(null);
+      setSearching(false);
+      return;
+    }
+
+    const cached = searchCacheRef.current.get(trimmedQuery);
+    if (cached) {
+      if (requestId === searchRequestIdRef.current) {
+        setResults(cached);
+        setError(null);
+        setSearching(false);
+      }
+      return;
+    }
+
+    setSearching(true);
+    setError(null);
+    try {
+      const res = await invoke<SkillSearchResult[]>("skills_search", { query: trimmedQuery });
+      if (requestId === searchRequestIdRef.current) {
+        searchCacheRef.current.set(trimmedQuery, res);
+        if (searchCacheRef.current.size > 30) {
+          const oldestKey = searchCacheRef.current.keys().next().value;
+          if (oldestKey) {
+            searchCacheRef.current.delete(oldestKey);
+          }
+        }
+        setResults(res);
+      }
+    } catch (e) {
+      if (requestId === searchRequestIdRef.current) {
+        setError(String(e));
+      }
+    } finally {
+      if (requestId === searchRequestIdRef.current) {
+        setSearching(false);
+      }
+    }
+  };
+
+  const renderedResultCards = useMemo(
+    () =>
+      results.map((s) => (
+        <RegistrySkillCard
+          key={s.id}
+          skill={s}
+          installing={installingSource === s.id}
+          onInstall={setPendingInstall}
+        />
+      )),
+    [results, installingSource]
+  );
+
+  const activeInstallingSkillName = useMemo(() => {
+    if (!installingSource) return null;
+    const fromResults = results.find((s) => s.id === installingSource)?.name;
+    if (fromResults) return fromResults;
+    if (pendingInstall?.id === installingSource) return pendingInstall.name;
+    return "skill";
+  }, [installingSource, results, pendingInstall]);
+
+  useEffect(() => {
+    if (debounceRef.current) {
+      clearTimeout(debounceRef.current);
+      debounceRef.current = null;
+    }
+
+    const requestId = ++searchRequestIdRef.current;
+
+    if (!hasActiveQuery) {
+      setResults([]);
+      setError(null);
+      setSearching(false);
+      return;
+    }
+
+    debounceRef.current = setTimeout(() => {
+      runSearch(normalizedQuery, requestId);
+    }, 400);
+
+    return () => {
+      if (debounceRef.current) {
+        clearTimeout(debounceRef.current);
+        debounceRef.current = null;
+      }
+    };
+  }, [normalizedQuery, hasActiveQuery]);
+
+  const handleInstallConfirm = async (clientIds: string[]) => {
+    if (!pendingInstall) return;
+    const installSource = pendingInstall.id?.trim() || pendingInstall.source?.trim();
+    if (!installSource) {
+      throw new Error("Invalid skill source");
+    }
+
+    if (clientIds.length === 0) {
+      throw new Error("Please select at least one client");
+    }
+
+    const targetPaths = clientIds
+      .map((id) => clients.find((c) => c.id === id))
+      .filter((c) => c?.skillsPath)
+      .map((c) => c!.skillsPath);
+
+    if (targetPaths.length === 0) {
+      throw new Error("No valid client paths selected for installation");
+    }
+
+    setInstallingSource(pendingInstall.id);
+    try {
+      await waitForNextFrame();
+      const installedName = await invoke<string>("skills_install", {
+        source: installSource,
+        targetPaths,
+        requestedName: pendingInstall.name,
+      });
+      showToast(`"${installedName || pendingInstall.name}" installed for ${clientIds.length} client${clientIds.length > 1 ? "s" : ""}`);
+    } catch (e) {
+      throw new Error(String(e));
+    } finally {
+      setInstallingSource(null);
+    }
+  };
+
+  return (
+    <div className="mb-10">
+      {/* View toggle: Discover / Installed */}
+      <div className="mb-5 flex items-center gap-2">
+        <button
+          onClick={() => setSkillsView("discover")}
+          className={cn(
+            "text-xs px-3 py-1.5 rounded-md border transition-colors",
+            skillsView === "discover"
+              ? "bg-primary/10 text-primary border-primary/30"
+              : "text-text-muted border-border hover:border-border-hover hover:text-text"
+          )}
+        >
+          Discover
+        </button>
+        <button
+          onClick={() => setSkillsView("installed")}
+          className={cn(
+            "text-xs px-3 py-1.5 rounded-md border transition-colors",
+            skillsView === "installed"
+              ? "bg-primary/10 text-primary border-primary/30"
+              : "text-text-muted border-border hover:border-border-hover hover:text-text"
+          )}
+        >
+          Installed
+        </button>
+      </div>
+
+      {/* Client filters for Installed view */}
+      {skillsView === "installed" && clients.length > 0 && (
+        <div className="mb-5 flex flex-wrap gap-1.5">
+          <button
+            onClick={() => setSelectedClientId("all")}
+            className={cn(
+              "text-xs px-2.5 py-1 rounded-full border transition-colors",
+              selectedClientId === "all"
+                ? "bg-primary/10 text-primary border-primary/30"
+                : "text-text-muted border-border hover:border-border-hover hover:text-text"
+            )}
+          >
+            All
+          </button>
+          {clients.map((c) => (
+            <button
+              key={c.id}
+              onClick={() => setSelectedClientId(c.id)}
+              className={cn(
+                "text-xs px-2.5 py-1 rounded-full border transition-colors",
+                selectedClientId === c.id
+                  ? "bg-primary/10 text-primary border-primary/30"
+                  : "text-text-muted border-border hover:border-border-hover hover:text-text"
+              )}
+            >
+              {c.name}
+            </button>
+          ))}
+        </div>
+      )}
+
+      {skillsView === "discover" && (
+        <>
+          <div className="relative mb-5">
+        <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-text-muted pointer-events-none" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+          <circle cx="11" cy="11" r="8" /><path d="m21 21-4.35-4.35" strokeLinecap="round" />
+        </svg>
+        {query && (
+          <>
+            {searching ? (
+              <div className="absolute right-3 top-1/2 -translate-y-1/2 w-3 h-3 border border-primary/40 border-t-primary rounded-full animate-spin" />
+            ) : (
+              <button
+                onClick={() => {
+                  if (debounceRef.current) {
+                    clearTimeout(debounceRef.current);
+                    debounceRef.current = null;
+                  }
+                  searchRequestIdRef.current += 1;
+                  setQuery("");
+                  setResults([]);
+                  setError(null);
+                  setSearching(false);
+                }}
+                className="absolute right-3 top-1/2 -translate-y-1/2 p-0.5 text-text-muted hover:text-text transition-colors"
+                title="Clear search"
+              >
+                <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            )}
+          </>
+        )}
+        <input
+          type="text"
+          value={query}
+          autoComplete="off"
+          autoCorrect="off"
+          autoCapitalize="off"
+          spellCheck="false"
+          onChange={(e) => {
+            const nextValue = e.target.value;
+            const nextTrimmed = nextValue.trim();
+            setQuery(nextValue);
+
+            if (nextTrimmed.length < 2) {
+              if (debounceRef.current) {
+                clearTimeout(debounceRef.current);
+                debounceRef.current = null;
+              }
+              searchRequestIdRef.current += 1;
+              setResults([]);
+              setError(null);
+              setSearching(false);
+              return;
+            }
+
+            setError(null);
+            setSearching(true);
+          }}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") {
+              if (debounceRef.current) clearTimeout(debounceRef.current);
+              const requestId = ++searchRequestIdRef.current;
+              setSearching(true);
+              runSearch(normalizedQuery, requestId);
+            }
+          }}
+          placeholder="Search skills (e.g. react, git, typescript)..."
+          className="w-full pl-9 pr-8 py-2 text-xs bg-surface border border-border rounded-lg text-text placeholder:text-text-muted/50 focus:outline-none focus:border-primary/40"
+        />
+      </div>
+
+      {error && <p className="text-[11px] text-red-400 mb-4">{error}</p>}
+      {installingSource && (
+        <div className="mb-4 flex items-center gap-2 rounded-lg border border-primary/20 bg-primary/5 px-3 py-2">
+          <div className="w-3.5 h-3.5 border border-primary/40 border-t-primary rounded-full animate-spin" />
+          <p className="text-[11px] text-primary">
+            Installing <span className="font-medium">{activeInstallingSkillName}</span>...
+          </p>
+        </div>
+      )}
+
+      {searching && hasActiveQuery ? (
+        <div className="grid grid-cols-3 gap-3">
+          {[0, 1, 2, 3, 4, 5].map((i) => (
+            <div key={i} className="rounded-lg border border-border bg-surface p-4 space-y-3 animate-pulse">
+              <div className="flex items-center gap-2">
+                <div className="w-7 h-7 rounded-md bg-surface-overlay" />
+                <div className="h-3 w-24 rounded bg-surface-overlay" />
+              </div>
+              <div className="h-2 w-full rounded bg-surface-overlay" />
+              <div className="h-8 rounded-md bg-surface-overlay" />
+            </div>
+          ))}
+        </div>
+      ) : !hasActiveQuery ? (
+        <div className="flex flex-col items-center gap-4 py-12 text-center">
+          <svg className="w-10 h-10 text-text-muted/30" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+            <circle cx="11" cy="11" r="8" />
+            <path d="m21 21-4.35-4.35" strokeLinecap="round" strokeLinejoin="round" />
+          </svg>
+          <div className="space-y-1">
+            <p className="text-sm text-text-muted">Search the skills.sh registry</p>
+            <p className="text-[11px] text-text-muted/50">Type at least 2 characters to search</p>
+          </div>
+          <div className="flex flex-wrap justify-center gap-2 mt-2">
+            <button
+              onClick={() => setQuery("react")}
+              className="text-[10px] px-3 py-1.5 rounded-full border border-border text-text-muted hover:border-primary/30 hover:text-primary transition-colors"
+            >
+              React
+            </button>
+            <button
+              onClick={() => setQuery("typescript")}
+              className="text-[10px] px-3 py-1.5 rounded-full border border-border text-text-muted hover:border-primary/30 hover:text-primary transition-colors"
+            >
+              TypeScript
+            </button>
+            <button
+              onClick={() => setQuery("python")}
+              className="text-[10px] px-3 py-1.5 rounded-full border border-border text-text-muted hover:border-primary/30 hover:text-primary transition-colors"
+            >
+              Python
+            </button>
+            <button
+              onClick={() => setQuery("git")}
+              className="text-[10px] px-3 py-1.5 rounded-full border border-border text-text-muted hover:border-primary/30 hover:text-primary transition-colors"
+            >
+              Git
+            </button>
+          </div>
+        </div>
+      ) : results.length === 0 ? (
+        <div className="flex flex-col items-center gap-2 py-12 text-center">
+          <svg className="w-10 h-10 text-text-muted/30" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M9.172 12.828a4 4 0 015.656 0M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z" />
+          </svg>
+          <p className="text-sm text-text-muted">No results for "{query}"</p>
+          <p className="text-[11px] text-text-muted/50">Try a different search term</p>
+        </div>
+      ) : (
+        <div key={normalizedQuery} className="grid grid-cols-3 gap-3">
+          {renderedResultCards}
+        </div>
+      )}
+        </>
+      )}
+
+      {skillsView === "installed" && (
+        <>
+          {loadingSkills ? (
+            <div className="grid grid-cols-3 gap-3">
+              {[0, 1, 2, 3, 4, 5].map((i) => (
+                <div key={i} className="rounded-lg border border-border bg-surface p-4 space-y-3 animate-pulse">
+                  <div className="flex items-center gap-2">
+                    <div className="w-7 h-7 rounded-md bg-surface-overlay" />
+                    <div className="h-3 w-24 rounded bg-surface-overlay" />
+                  </div>
+                  <div className="h-2 w-full rounded bg-surface-overlay" />
+                </div>
+              ))}
+            </div>
+          ) : filteredSkills.length === 0 ? (
+            <div className="flex flex-col items-center gap-2 py-16 text-center">
+              <p className="text-sm text-text-muted">No skills installed</p>
+              <p className="text-[11px] text-text-muted/50">
+                {selectedClientId === "all"
+                  ? "Switch to Discover tab to install skills"
+                  : `No skills installed for ${clients.find(c => c.id === selectedClientId)?.name}`}
+              </p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-3 gap-3">
+              {filteredSkills.map((skill) => (
+                <div key={`${skill.clientId}-${skill.path}`} className="relative">
+                  <SkillCard
+                    skill={skill}
+                    onOpenInFinder={async () => {
+                      try {
+                        await invoke("reveal_in_finder", { path: skill.path });
+                      } catch (e) {
+                        showToast(String(e));
+                      }
+                    }}
+                    onView={() => {}}
+                    onCopyTo={() => {}}
+                    onDelete={() => {}}
+                  />
+                  {selectedClientId === "all" && (
+                    <div className="absolute bottom-2 right-2">
+                      <span className="text-[10px] px-2 py-0.5 rounded-full bg-primary/10 text-primary border border-primary/30">
+                        {skill.clientName}
+                      </span>
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+        </>
+      )}
+
+      {pendingInstall && (
+        <InstallSkillDialog
+          skill={pendingInstall}
+          onClose={() => setPendingInstall(null)}
+          onInstall={handleInstallConfirm}
         />
       )}
     </div>

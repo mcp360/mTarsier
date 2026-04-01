@@ -1,23 +1,26 @@
 import {
   LayoutDashboard,
   Monitor,
-  Settings2,
   ClipboardList,
   Store,
   SlidersHorizontal,
   Info,
+  Brain,
+  Plug,
 } from "lucide-react";
 import mtarsierLogo from "../assets/mtarsier-logo.png";
 import NavItem from "./NavItem";
 import SystemStatus from "./SystemStatus";
+import { useSettingsStore } from "../store/settingsStore";
 
 const mainNav = [
   { to: "/", label: "Overview", icon: <LayoutDashboard size={16} /> },
   { to: "/clients", label: "Clients", icon: <Monitor size={16} /> },
-  { to: "/config", label: "Config", icon: <Settings2 size={16} /> },
+  { to: "/config", label: "MCP", icon: <Plug size={16} /> },
 ];
 
 const toolsNav = [
+  { to: "/skills", label: "Skills", icon: <Brain size={16} /> },
   { to: "/audit", label: "Audit Logs", icon: <ClipboardList size={16} /> },
   { to: "/marketplace", label: "Marketplace", icon: <Store size={16} /> },
 ];
@@ -29,6 +32,13 @@ const bottomNav = [
 
 
 function Sidebar() {
+  const { auditLogsEnabled } = useSettingsStore();
+
+  // Filter out Audit Logs if disabled
+  const filteredToolsNav = auditLogsEnabled
+    ? toolsNav
+    : toolsNav.filter(item => item.to !== "/audit");
+
   return (
     <aside className="flex h-full w-56 flex-col border-r border-border bg-surface">
       <div className="flex h-14 items-center gap-2.5 border-b border-border px-4">
@@ -41,7 +51,7 @@ function Sidebar() {
 
       <nav className="flex flex-1 flex-col gap-4 overflow-y-auto px-3 py-4">
         <div className="space-y-0.5">
-          {[...mainNav, ...toolsNav].map((item) => (
+          {[...mainNav, ...filteredToolsNav].map((item) => (
             <NavItem key={item.to} to={item.to} label={item.label} icon={item.icon} />
           ))}
         </div>

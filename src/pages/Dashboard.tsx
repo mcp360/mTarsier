@@ -135,13 +135,9 @@ function Dashboard() {
                       {installed.map((c) => (
                         <button
                           key={c.meta.id}
-                          onClick={() => {
-                            if (c.meta.configPath) navigate(`/config?client=${c.meta.id}`);
-                          }}
+                          onClick={() => navigate(`/config?client=${c.meta.id}`)}
                           className={`flex w-full items-center justify-between rounded-md px-2 py-1.5 text-left text-xs transition-colors ${
-                            c.meta.configPath
-                              ? "hover:bg-surface-overlay cursor-pointer"
-                              : "cursor-default"
+                            "hover:bg-surface-overlay cursor-pointer"
                           }`}
                         >
                           <span className="text-text truncate">{c.meta.name}</span>

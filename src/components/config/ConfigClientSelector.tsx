@@ -2,6 +2,7 @@ import { useConfigStore } from "../../store/configStore";
 import { useClientStore } from "../../store/clientStore";
 import { getConfigurableClients } from "../../lib/clients";
 import ConfigClientItem from "./ConfigClientItem";
+import type { ClientMeta } from "../../types/client";
 import type { ClientType } from "../../types/client";
 
 const typeOrder: ClientType[] = ["Desktop", "IDE", "CLI"];
@@ -10,11 +11,23 @@ function ConfigClientSelector() {
   const { selectedClientId, setSelectedClient } = useConfigStore();
   const clients = useClientStore((s) => s.clients);
   const configurableClients = getConfigurableClients();
+  const installedGuidedClients = clients
+    .filter((c) => c.installed && !c.meta.configPath && c.meta.detection.kind !== "none")
+    .map((c) => c.meta);
+
+  const visibleClientMap = new Map<string, ClientMeta>();
+  for (const client of configurableClients) {
+    visibleClientMap.set(client.id, client);
+  }
+  for (const client of installedGuidedClients) {
+    visibleClientMap.set(client.id, client);
+  }
+  const visibleClients = Array.from(visibleClientMap.values());
 
   const grouped = typeOrder
     .map((type) => ({
       type,
-      items: configurableClients.filter((c) => c.type === type),
+      items: visibleClients.filter((c) => c.type === type),
     }))
     .filter((g) => g.items.length > 0);
 
@@ -40,6 +53,7 @@ function ConfigClientSelector() {
                     client={client}
                     isSelected={selectedClientId === client.id}
                     installed={state?.installed ?? false}
+                    subtitle={!client.configPath ? "Web-managed setup" : undefined}
                     onSelect={() => setSelectedClient(client.id)}
                   />
                 );
