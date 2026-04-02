@@ -122,6 +122,14 @@ fn validate_skill_delete_path(raw_path: &str) -> Result<Option<PathBuf>, String>
     Ok(Some(canonical))
 }
 
+fn is_valid_github_identifier(s: &str) -> bool {
+    !s.is_empty()
+        && s.len() <= 100
+        && s.chars().all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_' || c == '.')
+        && !s.starts_with('-')
+        && !s.starts_with('.')
+}
+
 /// Parse GitHub source into owner/repo format
 /// Input: "github/awesome-copilot/git-commit" or "anthropics/anthropic-quickstarts"
 /// Output: ("github", "awesome-copilot") or ("anthropics", "anthropic-quickstarts")
@@ -138,7 +146,15 @@ fn parse_github_repo(source: &str) -> Result<(String, String), String> {
         if parts.len() < 2 {
             return Err("Invalid GitHub URL format".to_string());
         }
-        return Ok((parts[0].to_string(), parts[1].to_string()));
+        let owner = parts[0];
+        let repo = parts[1];
+        if !is_valid_github_identifier(owner) {
+            return Err(format!("Invalid GitHub owner name: '{}'", owner));
+        }
+        if !is_valid_github_identifier(repo) {
+            return Err(format!("Invalid GitHub repository name: '{}'", repo));
+        }
+        return Ok((owner.to_string(), repo.to_string()));
     }
 
     // Handle owner/repo or owner/repo/path format
@@ -147,7 +163,16 @@ fn parse_github_repo(source: &str) -> Result<(String, String), String> {
         return Err("Source must be in format: owner/repo or owner/repo/path".to_string());
     }
 
-    Ok((parts[0].to_string(), parts[1].to_string()))
+    let owner = parts[0];
+    let repo = parts[1];
+    if !is_valid_github_identifier(owner) {
+        return Err(format!("Invalid GitHub owner name: '{}'", owner));
+    }
+    if !is_valid_github_identifier(repo) {
+        return Err(format!("Invalid GitHub repository name: '{}'", repo));
+    }
+
+    Ok((owner.to_string(), repo.to_string()))
 }
 
 /// Download and extract GitHub repository tarball
@@ -197,6 +222,26 @@ fn download_github_tarball(owner: &str, repo: &str, extract_to: &Path) -> Result
     extract_tarball(&download_output.stdout, extract_to, owner, repo)
 }
 
+/// Recursively remove symlinks from a directory (cross-platform zip-slip mitigation)
+fn remove_symlinks_recursive(dir: &Path) {
+    let entries = match std::fs::read_dir(dir) {
+        Ok(e) => e,
+        Err(_) => return,
+    };
+    for entry in entries.flatten() {
+        let path = entry.path();
+        match entry.file_type() {
+            Ok(ft) if ft.is_symlink() => {
+                let _ = std::fs::remove_file(&path);
+            }
+            Ok(ft) if ft.is_dir() => {
+                remove_symlinks_recursive(&path);
+            }
+            _ => {}
+        }
+    }
+}
+
 /// Extract tarball data to target directory
 fn extract_tarball(tarball_data: &[u8], extract_to: &Path, owner: &str, repo: &str) -> Result<(), String> {
     std::fs::create_dir_all(extract_to)
@@ -224,6 +269,9 @@ fn extract_tarball(tarball_data: &[u8], extract_to: &Path, owner: &str, repo: &s
         let stderr = String::from_utf8_lossy(&extract_status.stderr);
         return Err(format!("Failed to extract tarball for {}/{}: {}", owner, repo, stderr));
     }
+
+    // Remove any symlinks from the extracted directory to prevent zip-slip attacks
+    remove_symlinks_recursive(extract_to);
 
     Ok(())
 }
@@ -260,8 +308,18 @@ fn download_skill_via_github(source: &str, install_home: &PathBuf) -> Result<(),
     Ok(())
 }
 
+const MAX_SKILL_SEARCH_DEPTH: usize = 10;
+
 /// Recursively find skill directories (containing SKILL.md) and copy them
 fn find_and_copy_skills(source_dir: &Path, dest_dir: &Path) -> Result<usize, String> {
+    find_and_copy_skills_inner(source_dir, dest_dir, 0)
+}
+
+fn find_and_copy_skills_inner(source_dir: &Path, dest_dir: &Path, depth: usize) -> Result<usize, String> {
+    if depth > MAX_SKILL_SEARCH_DEPTH {
+        return Err("Skill directory nesting too deep".to_string());
+    }
+
     if !source_dir.exists() {
         return Ok(0);
     }
@@ -312,7 +370,7 @@ fn find_and_copy_skills(source_dir: &Path, dest_dir: &Path) -> Result<usize, Str
                 }
             }
             // Recursively search subdirectories
-            skills_found += find_and_copy_skills(&path, dest_dir)?;
+            skills_found += find_and_copy_skills_inner(&path, dest_dir, depth + 1)?;
         }
     }
 
@@ -491,7 +549,7 @@ fn choose_best_skill_match(
     vec![fuzzy.remove(0).1]
 }
 
-fn skills_install_blocking(
+pub fn skills_install_blocking(
     source: String,
     target_paths: Vec<String>,
     requested_name: Option<String>,

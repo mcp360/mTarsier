@@ -13,6 +13,8 @@ pub struct ClientDef {
     pub detection_value_win: Option<&'static str>,
     /// Linux-specific detection path for app_bundle clients
     pub detection_value_linux: Option<&'static str>,
+    /// Skills directory path for clients that support skills (None = not supported)
+    pub skills_path: Option<&'static str>,
 }
 
 pub static REGISTRY: &[ClientDef] = &[
@@ -29,6 +31,7 @@ pub static REGISTRY: &[ClientDef] = &[
         detection_value: Some("/Applications/Claude.app"),
         detection_value_win: Some("%LOCALAPPDATA%\\Microsoft\\WindowsApps\\Claude.exe"),
         detection_value_linux: None,
+        skills_path: Some("~/Library/Application Support/Claude/skills"),
     },
     ClientDef {
         id: "claude-code",
@@ -43,6 +46,7 @@ pub static REGISTRY: &[ClientDef] = &[
         detection_value: Some("claude"),
         detection_value_win: None, // binary name same everywhere; probe handles .cmd
         detection_value_linux: None,
+        skills_path: Some("~/.claude/skills"),
     },
     ClientDef {
         id: "claude-web",
@@ -57,6 +61,7 @@ pub static REGISTRY: &[ClientDef] = &[
         detection_value: None,
         detection_value_win: None,
         detection_value_linux: None,
+        skills_path: None,
     },
     ClientDef {
         id: "chatgpt-desktop",
@@ -71,6 +76,7 @@ pub static REGISTRY: &[ClientDef] = &[
         detection_value: Some("/Applications/ChatGPT.app"),
         detection_value_win: Some("%LOCALAPPDATA%\\Microsoft\\WindowsApps\\ChatGPT.exe"),
         detection_value_linux: None,
+        skills_path: None,
     },
     ClientDef {
         id: "chatgpt",
@@ -85,6 +91,7 @@ pub static REGISTRY: &[ClientDef] = &[
         detection_value: None,
         detection_value_win: None,
         detection_value_linux: None,
+        skills_path: None,
     },
     ClientDef {
         id: "codex-app",
@@ -99,6 +106,7 @@ pub static REGISTRY: &[ClientDef] = &[
         detection_value: Some("/Applications/Codex.app"),
         detection_value_win: Some("%LOCALAPPDATA%\\Programs\\Codex\\Codex.exe"),
         detection_value_linux: None,
+        skills_path: None,
     },
     ClientDef {
         id: "codex-cli",
@@ -113,6 +121,7 @@ pub static REGISTRY: &[ClientDef] = &[
         detection_value: Some("codex"),
         detection_value_win: None,
         detection_value_linux: None,
+        skills_path: Some("~/.codex/skills"),
     },
     ClientDef {
         id: "opencode",
@@ -127,6 +136,7 @@ pub static REGISTRY: &[ClientDef] = &[
         detection_value: Some("opencode"),
         detection_value_win: None,
         detection_value_linux: None,
+        skills_path: Some("~/.agents/skills"),
     },
     ClientDef {
         id: "gemini-cli",
@@ -141,6 +151,7 @@ pub static REGISTRY: &[ClientDef] = &[
         detection_value: Some("gemini"),
         detection_value_win: None,
         detection_value_linux: None,
+        skills_path: Some("~/.gemini/skills"),
     },
     ClientDef {
         id: "mcpporter",
@@ -155,6 +166,7 @@ pub static REGISTRY: &[ClientDef] = &[
         detection_value: Some("mcporter"),
         detection_value_win: None,
         detection_value_linux: None,
+        skills_path: None,
     },
     ClientDef {
         id: "antigravity",
@@ -169,6 +181,7 @@ pub static REGISTRY: &[ClientDef] = &[
         detection_value: Some("/Applications/Antigravity.app"),
         detection_value_win: None,
         detection_value_linux: Some("/usr/bin/antigravity"),
+        skills_path: Some("~/.antigravity/skills"),
     },
     ClientDef {
         id: "github-copilot",
@@ -183,6 +196,7 @@ pub static REGISTRY: &[ClientDef] = &[
         detection_value: Some("github.copilot-chat"),
         detection_value_win: None,
         detection_value_linux: None,
+        skills_path: Some("~/.copilot/skills"),
     },
     ClientDef {
         id: "github-copilot-cli",
@@ -197,6 +211,7 @@ pub static REGISTRY: &[ClientDef] = &[
         detection_value: Some("copilot"),
         detection_value_win: None,
         detection_value_linux: None,
+        skills_path: Some("~/.copilot/skills"),
     },
     ClientDef {
         id: "cursor",
@@ -211,6 +226,7 @@ pub static REGISTRY: &[ClientDef] = &[
         detection_value: Some("/Applications/Cursor.app"),
         detection_value_win: Some("%LOCALAPPDATA%\\Programs\\cursor\\Cursor.exe"),
         detection_value_linux: Some("/usr/bin/cursor"),
+        skills_path: Some("~/.cursor/skills"),
     },
     ClientDef {
         id: "windsurf",
@@ -225,6 +241,7 @@ pub static REGISTRY: &[ClientDef] = &[
         detection_value: Some("/Applications/Windsurf.app"),
         detection_value_win: Some("%LOCALAPPDATA%\\Programs\\Windsurf\\Windsurf.exe"),
         detection_value_linux: Some("/usr/bin/windsurf"),
+        skills_path: Some("~/.codeium/windsurf/skills"),
     },
 ];
 
@@ -239,4 +256,8 @@ pub fn platform_config_path(c: &ClientDef) -> Option<&'static str> {
     return c.config_path_linux.or(c.config_path);
     #[cfg(not(any(windows, target_os = "linux")))]
     return c.config_path;
+}
+
+pub fn platform_skills_path(c: &ClientDef) -> Option<&'static str> {
+    c.skills_path
 }
