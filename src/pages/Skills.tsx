@@ -497,11 +497,18 @@ function DiscoverTab({
   const [pendingInstall, setPendingInstall] = useState<SkillSearchResult | null>(null);
   const [installingSource, setInstallingSource] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [topPicks, setTopPicks] = useState<SkillSearchResult[]>([]);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const searchRequestIdRef = useRef(0);
   const searchCacheRef = useRef<Map<string, SkillSearchResult[]>>(new Map());
   const normalizedQuery = query.trim();
   const hasActiveQuery = normalizedQuery.length >= 2;
+
+  useEffect(() => {
+    invoke<SkillSearchResult[]>("get_featured_skills")
+      .then(setTopPicks)
+      .catch(() => {});
+  }, []);
   const waitForNextFrame = () =>
     new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
 
@@ -618,6 +625,10 @@ function DiscoverTab({
     const installSource = pendingInstall.id?.trim() || pendingInstall.source?.trim();
     if (!installSource) {
       throw new Error("Invalid skill source");
+    }
+    const sourcePattern = /^[a-zA-Z0-9._-]+\/[a-zA-Z0-9._-]+(\/[a-zA-Z0-9._-]+)?$/;
+    if (!sourcePattern.test(installSource)) {
+      throw new Error("Invalid skill source format");
     }
 
     if (clientIds.length === 0 && customPaths.length === 0) {
@@ -757,47 +768,52 @@ function DiscoverTab({
           ))}
         </div>
       ) : !hasActiveQuery ? (
-        <div className="flex flex-col items-center gap-4 py-16 text-center">
-          <svg className="w-12 h-12 text-text-muted/30" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-            <circle cx="11" cy="11" r="8" />
-            <path d="m21 21-4.35-4.35" strokeLinecap="round" strokeLinejoin="round" />
-          </svg>
-          <div className="space-y-1">
-            <p className="text-sm text-text-muted">Search the skills.sh registry</p>
-            <p className="text-[11px] text-text-muted/50">Type at least 2 characters to search</p>
+        <div className="space-y-5">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-xs font-semibold text-text">Top Picks</p>
+              <p className="text-[10px] text-text-muted/60 mt-0.5">Most installed skills from the registry</p>
+            </div>
+            <div className="flex flex-wrap gap-1.5">
+              {["react", "firebase", "typescript", "python", "git"].map((q) => (
+                <button
+                  key={q}
+                  onClick={() => setQuery(q)}
+                  className="text-[10px] px-2.5 py-1 rounded-full border border-border text-text-muted hover:border-primary/30 hover:text-primary transition-colors capitalize"
+                >
+                  {q}
+                </button>
+              ))}
+            </div>
           </div>
-          <div className="flex flex-wrap justify-center gap-2 mt-2">
-            <button
-              onClick={() => { setQuery("react"); }}
-              className="text-[10px] px-3 py-1.5 rounded-full border border-border text-text-muted hover:border-primary/30 hover:text-primary transition-colors"
-            >
-              React
-            </button>
-            <button
-              onClick={() => { setQuery("firebase"); }}
-              className="text-[10px] px-3 py-1.5 rounded-full border border-border text-text-muted hover:border-primary/30 hover:text-primary transition-colors"
-            >
-              Firebase
-            </button>
-            <button
-              onClick={() => { setQuery("typescript"); }}
-              className="text-[10px] px-3 py-1.5 rounded-full border border-border text-text-muted hover:border-primary/30 hover:text-primary transition-colors"
-            >
-              TypeScript
-            </button>
-            <button
-              onClick={() => { setQuery("python"); }}
-              className="text-[10px] px-3 py-1.5 rounded-full border border-border text-text-muted hover:border-primary/30 hover:text-primary transition-colors"
-            >
-              Python
-            </button>
-            <button
-              onClick={() => { setQuery("git"); }}
-              className="text-[10px] px-3 py-1.5 rounded-full border border-border text-text-muted hover:border-primary/30 hover:text-primary transition-colors"
-            >
-              Git
-            </button>
-          </div>
+
+          {topPicks.length > 0 ? (
+            <div className="grid grid-cols-3 gap-3">
+              {topPicks.map((skill) => (
+                <RegistrySkillCard
+                  key={skill.id}
+                  skill={skill}
+                  installing={installingSource === skill.id}
+                  onInstall={setPendingInstall}
+                />
+              ))}
+            </div>
+          ) : (
+            <div className="grid grid-cols-3 gap-3">
+              {[0, 1, 2, 3, 4, 5].map((i) => (
+                <div key={i} className="rounded-lg border border-border bg-surface p-4 space-y-3 animate-pulse">
+                  <div className="flex items-center gap-2">
+                    <div className="w-7 h-7 rounded-md bg-surface-overlay" />
+                    <div className="flex-1 space-y-1.5">
+                      <div className="h-2.5 rounded bg-surface-overlay w-3/4" />
+                      <div className="h-2 rounded bg-surface-overlay w-1/2" />
+                    </div>
+                  </div>
+                  <div className="h-8 rounded-md bg-surface-overlay" />
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       ) : results.length === 0 ? (
         <div className="flex flex-col items-center gap-2 py-16 text-center">

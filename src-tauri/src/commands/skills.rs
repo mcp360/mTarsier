@@ -945,3 +945,31 @@ pub fn read_skill(skill_path: String) -> Result<String, String> {
     let path = skill_dir.join("SKILL.md");
     std::fs::read_to_string(&path).map_err(|e| e.to_string())
 }
+
+// ─── Featured / Top Picks ─────────────────────────────────────────────────────
+
+#[derive(Debug, Serialize, Clone)]
+pub struct FeaturedSkill {
+    pub id: String,
+    pub name: String,
+    pub source: String,
+    pub installs: u64,
+}
+
+#[tauri::command]
+pub fn get_featured_skills() -> Vec<FeaturedSkill> {
+    vec![
+        FeaturedSkill { id: "vercel-labs/skills/find-skills".into(),                             name: "find-skills".into(),                      source: "vercel-labs/skills".into(),                 installs: 787_464 },
+        FeaturedSkill { id: "vercel-labs/agent-skills/vercel-react-best-practices".into(),    name: "vercel-react-best-practices".into(),      source: "vercel-labs/agent-skills".into(),           installs: 263_730 },
+        FeaturedSkill { id: "anthropics/skills/frontend-design".into(),                       name: "frontend-design".into(),                  source: "anthropics/skills".into(),                  installs: 222_180 },
+        FeaturedSkill { id: "vercel-labs/agent-skills/web-design-guidelines".into(),          name: "web-design-guidelines".into(),            source: "vercel-labs/agent-skills".into(),           installs: 212_900 },
+        FeaturedSkill { id: "remotion-dev/skills/remotion-best-practices".into(),             name: "remotion-best-practices".into(),          source: "remotion-dev/skills".into(),                installs: 189_800 },
+        FeaturedSkill { id: "microsoft/github-copilot-for-azure/azure-ai".into(),             name: "azure-ai".into(),                         source: "microsoft/github-copilot-for-azure".into(), installs: 146_900 },
+        FeaturedSkill { id: "vercel-labs/agent-browser/agent-browser".into(),                 name: "agent-browser".into(),                    source: "vercel-labs/agent-browser".into(),          installs: 142_800 },
+        FeaturedSkill { id: "anthropics/skills/skill-creator".into(),                         name: "skill-creator".into(),                    source: "anthropics/skills".into(),                  installs: 117_800 },
+        FeaturedSkill { id: "coreyhaines31/marketingskills/seo-audit".into(),                 name: "seo-audit".into(),                        source: "coreyhaines31/marketingskills".into(),      installs: 0       },
+        FeaturedSkill { id: "inferen-sh/skills/ai-image-generation".into(),                    name: "ai-image-generation".into(),              source: "inferen-sh/skills".into(),                  installs: 114_800 },
+        FeaturedSkill { id: "supabase/agent-skills/supabase-postgres-best-practices".into(),  name: "supabase-postgres-best-practices".into(), source: "supabase/agent-skills".into(),              installs: 0       },
+        FeaturedSkill { id: "shadcn/ui/shadcn".into(),                                        name: "shadcn".into(),                           source: "shadcn/ui".into(),                          installs: 0       },
+    ]
+}
