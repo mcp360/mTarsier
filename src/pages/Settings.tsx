@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { useThemeStore } from "../store/themeStore";
+import { useSettingsStore } from "../store/settingsStore";
 import { themes, type ThemeId } from "../lib/themes";
 import { UpdateSection } from "../components/settings/UpdateSection";
 
@@ -137,6 +138,7 @@ function CliSection() {
 
 function Settings() {
   const { themeId, setTheme } = useThemeStore();
+  const { auditLogsEnabled, setAuditLogsEnabled } = useSettingsStore();
 
   return (
     <div className="flex h-full flex-col overflow-y-auto">
@@ -179,6 +181,45 @@ function Settings() {
               </button>
             );
           })}
+        </div>
+      </section>
+
+      <section>
+        <h2 className="text-sm font-semibold uppercase tracking-wider text-text-muted mb-4">
+          Privacy & Logs
+        </h2>
+        <div className="max-w-2xl space-y-4">
+          <div className="rounded-lg border border-border bg-surface p-4">
+            <div className="flex items-start justify-between">
+              <div className="flex-1">
+                <h3 className="text-sm font-medium text-text">Audit Logs</h3>
+                <p className="mt-1 text-xs text-text-muted">
+                  Track all configuration changes and operations performed in the application.
+                  When disabled, no audit logs will be recorded.
+                </p>
+              </div>
+              <button
+                onClick={() => setAuditLogsEnabled(!auditLogsEnabled)}
+                className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+                  auditLogsEnabled ? "bg-primary" : "bg-text-muted/30"
+                }`}
+              >
+                <span className="sr-only">Toggle audit logs</span>
+                <span
+                  className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                    auditLogsEnabled ? "translate-x-6" : "translate-x-1"
+                  }`}
+                />
+              </button>
+            </div>
+            {!auditLogsEnabled && (
+              <div className="mt-3 rounded-md bg-amber-500/10 border border-amber-500/20 p-3">
+                <p className="text-xs text-amber-400">
+                  ⚠️ Audit logging is disabled. Configuration changes will not be tracked.
+                </p>
+              </div>
+            )}
+          </div>
         </div>
       </section>
 

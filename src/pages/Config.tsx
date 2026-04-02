@@ -7,6 +7,7 @@ import EasyModeEditor from "../components/config/EasyModeEditor";
 import MonacoEditorWrapper from "../components/config/MonacoEditorWrapper";
 import ValidationBar from "../components/config/ValidationBar";
 import BackupPanel from "../components/config/BackupPanel";
+import GuidedSetupPanel from "../components/config/GuidedSetupPanel";
 
 function Config() {
   const [searchParams] = useSearchParams();
@@ -56,6 +57,8 @@ function Config() {
           <div className="flex-1 flex items-center justify-center">
             <div className="w-5 h-5 border-2 border-primary/30 border-t-primary rounded-full animate-spin" />
           </div>
+        ) : !selectedClient.configPath ? (
+          <GuidedSetupPanel client={selectedClient} />
         ) : (
           <>
             <ConfigToolbar />

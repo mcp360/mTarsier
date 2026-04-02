@@ -1,5 +1,6 @@
 import { useClientStore } from "../../store/clientStore";
 import McpServerList from "./McpServerList";
+import ClientSkillsPanel from "./ClientSkillsPanel";
 
 const typeBadge: Record<string, string> = {
   Desktop: "bg-surface-overlay text-text-muted",
@@ -124,6 +125,12 @@ function ClientDetailPanel() {
             <McpServerList configPath={meta.configPath} configKey={meta.configKey} configFormat={meta.configFormat} />
           </div>
         )}
+
+        <ClientSkillsPanel
+          clientId={meta.id}
+          supportsSkills={meta.supportsSkills}
+          skillsPath={meta.skillsPath}
+        />
 
         {/* Edit config link for local clients */}
         {installed && meta.configPath && (

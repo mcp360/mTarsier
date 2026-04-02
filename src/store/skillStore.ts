@@ -1,13 +1,12 @@
 import { create } from "zustand";
 import { invoke } from "@tauri-apps/api/core";
-import { CLIENT_REGISTRY } from "../lib/clients";
 import type { ClientMeta } from "../types/client";
 
 export interface InstalledSkill {
   name: string;
   description: string;
   path: string;
-  rawContent: string;
+  raw_content: string;
 }
 
 interface SkillStore {
@@ -16,14 +15,10 @@ interface SkillStore {
   isLoading: boolean;
   error: string | null;
   setSelectedClient: (id: string) => void;
-  loadSkills: (clientId: string) => Promise<void>;
-  writeSkill: (clientId: string, name: string, content: string) => Promise<void>;
-  deleteSkill: (path: string, clientId: string) => Promise<void>;
-}
-
-function getSkillsPath(clientId: string): string | null {
-  const client = CLIENT_REGISTRY.find((c) => c.id === clientId);
-  return client?.skillsPath ?? null;
+  loadSkills: (skillsPath: string | undefined) => Promise<void>;
+  writeSkill: (skillsPath: string, name: string, content: string) => Promise<void>;
+  deleteSkill: (path: string, skillsPath: string | undefined) => Promise<void>;
+  deleteSkills: (paths: string[], skillsPath: string | undefined) => Promise<void>;
 }
 
 export const useSkillStore = create<SkillStore>((set, get) => ({
@@ -34,16 +29,18 @@ export const useSkillStore = create<SkillStore>((set, get) => ({
 
   setSelectedClient: (id) => {
     set({ selectedClientId: id });
-    get().loadSkills(id);
   },
 
-  loadSkills: async (clientId) => {
-    const skillsPath = getSkillsPath(clientId);
+  loadSkills: async (skillsPath) => {
     if (!skillsPath) {
-      set({ skills: [], error: null });
+      set({ skills: [], error: null, isLoading: false });
       return;
     }
-    set({ isLoading: true, error: null });
+    // Only show loading if we don't have skills already (prevents flicker on tab switch)
+    const hasExistingSkills = get().skills.length > 0;
+    if (!hasExistingSkills) {
+      set({ isLoading: true, error: null });
+    }
     try {
       const skills = await invoke<InstalledSkill[]>("list_skills", { skillsPath });
       set({ skills, isLoading: false });
@@ -52,19 +49,24 @@ export const useSkillStore = create<SkillStore>((set, get) => ({
     }
   },
 
-  writeSkill: async (clientId, name, content) => {
-    const skillsPath = getSkillsPath(clientId);
+  writeSkill: async (skillsPath, name, content) => {
     if (!skillsPath) return;
     await invoke<string>("write_skill", { skillsPath, skillName: name, content });
-    await get().loadSkills(clientId);
+    await get().loadSkills(skillsPath);
   },
 
-  deleteSkill: async (path, clientId) => {
+  deleteSkill: async (path, skillsPath) => {
     await invoke("delete_skill", { skillPath: path });
-    await get().loadSkills(clientId);
+    await get().loadSkills(skillsPath);
+  },
+
+  deleteSkills: async (paths, skillsPath) => {
+    if (paths.length === 0) return;
+    await invoke<number>("delete_skills_bulk", { skillPaths: paths });
+    await get().loadSkills(skillsPath);
   },
 }));
 
-export function getSkillableClients(): ClientMeta[] {
-  return CLIENT_REGISTRY.filter((c) => c.supportsSkills && c.skillsPath);
+export function getSkillableClients(detectedClients: ClientMeta[]): ClientMeta[] {
+  return detectedClients.filter((c) => c.supportsSkills && c.skillsPath);
 }

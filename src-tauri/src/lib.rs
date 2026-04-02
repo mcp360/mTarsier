@@ -34,6 +34,7 @@ pub fn run() {
       commands::cli::check_cli_installed,
       commands::io::export_tsr,
       commands::io::import_tsr,
+      commands::io::pick_folder,
       commands::server::read_mtarsier_store,
       commands::server::write_mtarsier_store,
       commands::updater::check_for_update,
@@ -42,10 +43,12 @@ pub fn run() {
       commands::skills::list_skills,
       commands::skills::write_skill,
       commands::skills::delete_skill,
+      commands::skills::delete_skills_bulk,
       commands::skills::read_skill,
       commands::skills::reveal_in_finder,
       commands::skills::skills_search,
       commands::skills::skills_install,
+      commands::skills::get_featured_skills,
     ])
     .plugin(tauri_plugin_updater::Builder::new().build())
     .plugin(tauri_plugin_dialog::init())

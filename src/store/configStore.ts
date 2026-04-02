@@ -254,7 +254,24 @@ export const useConfigStore = create<ConfigStore>((set, get) => ({
 
   loadConfig: async (clientId) => {
     const client = getClientById(clientId);
-    if (!client || !client.configPath) return;
+    if (!client) return;
+    if (!client.configPath) {
+      set({
+        rawContent: "",
+        originalContent: "",
+        servers: {},
+        disabledServers: {},
+        removedServers: {},
+        isDirty: false,
+        isLoading: false,
+        error: null,
+        validationError: null,
+        selectedClient: client,
+        selectedClientId: clientId,
+        projectScopes: [],
+      });
+      return;
+    }
 
     // Ensure home dir is resolved for {HOME} placeholder in configKey
     await getHomeDir();

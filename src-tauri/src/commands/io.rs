@@ -25,6 +25,23 @@ pub async fn export_tsr(
     }
 }
 
+/// Open a native folder picker and return the selected folder path.
+/// Returns `null` if the user cancelled.
+#[tauri::command]
+pub async fn pick_folder(app: tauri::AppHandle) -> Result<Option<String>, String> {
+    let result = app
+        .dialog()
+        .file()
+        .set_title("Select Skills Folder")
+        .blocking_pick_folder();
+
+    match result {
+        Some(FilePath::Path(path)) => Ok(Some(path.to_string_lossy().to_string())),
+        Some(_) => Err("Unsupported path type".to_string()),
+        None => Ok(None),
+    }
+}
+
 /// Open a native file picker filtered to .tsr/.json and return the file content.
 /// Returns `null` if the user cancelled.
 #[tauri::command]

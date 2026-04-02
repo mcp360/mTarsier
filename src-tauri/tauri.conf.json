@@ -31,7 +31,7 @@
   "plugins": {
     "updater": {
       "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IEQ2RjQzQTUyMjY4NDc5QUUKUldTdWVZUW1VanIwMWk0R0xCbzh1Rjg1dDBoQ0xqZitoVzAreWtFaW9wT3Q1SnltUFF5YWFUU04K",
-      "endpoints": ["https://mcp360.ai/api/updates/mcp-tarsier"],
+      "endpoints": ["https://mtarsier.com/api/updates/mcp-tarsier"],
       "windows": { "installMode": "passive" }
     }
   },

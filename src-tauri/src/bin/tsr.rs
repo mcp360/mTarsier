@@ -4,9 +4,10 @@ use std::process;
 
 use app_lib::commands::clients::{detect_installed_clients_sync, read_mcp_servers, DetectionRequest};
 use app_lib::commands::server::{read_store, write_store, ServerEntry};
+use app_lib::commands::skills::{delete_skill, list_skills, skills_install_blocking, skills_search};
 use app_lib::commands::utils::{ensure_json_path, expand_config_key, expand_tilde};
 use app_lib::marketplace::{find_server, MARKETPLACE};
-use app_lib::registry::{find_client, platform_config_path, REGISTRY};
+use app_lib::registry::{find_client, platform_config_path, platform_skills_path, REGISTRY};
 
 #[derive(Parser)]
 #[command(
@@ -99,6 +100,43 @@ enum Commands {
         #[arg(long)]
         client: String,
     },
+    /// Manage skills for an AI client
+    Skills {
+        #[command(subcommand)]
+        action: SkillsCommands,
+    },
+}
+
+#[derive(Subcommand)]
+enum SkillsCommands {
+    /// List installed skills for a client
+    List {
+        #[arg(long)]
+        client: String,
+        #[arg(long)]
+        json: bool,
+    },
+    /// Install a skill from a GitHub source (owner/repo or owner/repo/skill-name)
+    Install {
+        source: String,
+        #[arg(long)]
+        client: String,
+        /// Specific skill name to install when the repo contains multiple skills
+        #[arg(long)]
+        name: Option<String>,
+    },
+    /// Remove an installed skill by name
+    Remove {
+        name: String,
+        #[arg(long)]
+        client: String,
+    },
+    /// Search the skills.sh registry for available skills
+    Search {
+        query: String,
+        #[arg(long)]
+        json: bool,
+    },
 }
 
 fn main() {
@@ -136,6 +174,12 @@ fn main() {
         }) => cmd_install(name, client, params),
         Some(Commands::Disable { name, client }) => cmd_disable(name, client),
         Some(Commands::Enable { name, client }) => cmd_enable(name, client),
+        Some(Commands::Skills { action }) => match action {
+            SkillsCommands::List { client, json } => cmd_skills_list(client, json),
+            SkillsCommands::Install { source, client, name } => cmd_skills_install(source, client, name),
+            SkillsCommands::Remove { name, client } => cmd_skills_remove(name, client),
+            SkillsCommands::Search { query, json } => cmd_skills_search(query, json),
+        },
     }
 }
 
@@ -1182,6 +1226,172 @@ fn json_to_toml_value(v: &serde_json::Value) -> toml::Value {
                 .map(|(k, v)| (k.clone(), json_to_toml_value(v)))
                 .collect();
             toml::Value::Table(map)
+        }
+    }
+}
+
+// ─── Skills command implementations ──────────────────────────────────────────
+
+fn resolve_client_skills_path(client_id: &str) -> (&'static str, &'static str) {
+    let client_def = match find_client(client_id) {
+        Some(c) => c,
+        None => {
+            eprintln!("Unknown client: {}", client_id);
+            eprintln!(
+                "Available: {}",
+                REGISTRY.iter().map(|c| c.id).collect::<Vec<_>>().join(", ")
+            );
+            process::exit(1);
+        }
+    };
+    let skills_path = match platform_skills_path(client_def) {
+        Some(p) => p,
+        None => {
+            eprintln!("Client '{}' does not support skills.", client_def.name);
+            process::exit(1);
+        }
+    };
+    (client_def.name, skills_path)
+}
+
+fn cmd_skills_list(client: String, json: bool) {
+    let (client_name, skills_path) = resolve_client_skills_path(&client);
+
+    match list_skills(skills_path.to_string()) {
+        Ok(skills) => {
+            if json {
+                let json_arr: Vec<serde_json::Value> = skills
+                    .iter()
+                    .map(|s| serde_json::json!({
+                        "name": s.name,
+                        "description": s.description,
+                        "path": s.path,
+                    }))
+                    .collect();
+                match serde_json::to_string_pretty(&json_arr) {
+                    Ok(s) => println!("{}", s),
+                    Err(e) => {
+                        eprintln!("Error serializing JSON: {}", e);
+                        process::exit(1);
+                    }
+                }
+                return;
+            }
+
+            if skills.is_empty() {
+                println!("No skills installed for {}.", client_name);
+                println!("  Path: {}", expand_tilde(skills_path).display());
+                return;
+            }
+
+            println!("\n── {} skills ({}) ──", client_name, skills_path);
+            println!("  {:<30} {}", "Name", "Description");
+            println!("  {}", "─".repeat(60));
+            for s in &skills {
+                println!("  {:<30} {}", s.name, s.description);
+            }
+        }
+        Err(e) => {
+            eprintln!("Error listing skills: {}", e);
+            process::exit(1);
+        }
+    }
+}
+
+fn cmd_skills_install(source: String, client: String, name: Option<String>) {
+    let (client_name, skills_path) = resolve_client_skills_path(&client);
+
+    println!("Installing '{}' for {}...", source, client_name);
+
+    match skills_install_blocking(source.clone(), vec![skills_path.to_string()], name) {
+        Ok(installed) => {
+            println!("✓ Installed '{}' to {}", installed, expand_tilde(skills_path).display());
+        }
+        Err(e) => {
+            eprintln!("Error installing skill '{}': {}", source, e);
+            process::exit(1);
+        }
+    }
+}
+
+fn cmd_skills_search(query: String, json: bool) {
+    match skills_search(query.clone()) {
+        Ok(results) => {
+            if json {
+                let json_arr: Vec<serde_json::Value> = results
+                    .iter()
+                    .map(|s| serde_json::json!({
+                        "id": s.id,
+                        "name": s.name,
+                        "installs": s.installs,
+                        "source": s.source,
+                    }))
+                    .collect();
+                match serde_json::to_string_pretty(&json_arr) {
+                    Ok(s) => println!("{}", s),
+                    Err(e) => {
+                        eprintln!("Error serializing JSON: {}", e);
+                        process::exit(1);
+                    }
+                }
+                return;
+            }
+
+            if results.is_empty() {
+                println!("No skills found for '{}'.", query);
+                return;
+            }
+
+            println!("\n── Skills matching '{}' ──", query);
+            println!("  {:<30} {:>8}  {}", "Name", "Installs", "Source");
+            println!("  {}", "─".repeat(70));
+            for s in &results {
+                let installs = s.installs.map(|n| n.to_string()).unwrap_or_else(|| "—".to_string());
+                let source = s.source.as_deref().unwrap_or("—");
+                println!("  {:<30} {:>8}  {}", s.name, installs, source);
+            }
+
+            // Show a concrete install example using the top result
+            let example = results.first().and_then(|s| s.source.as_deref()).map(|src| {
+                let first = results.first().unwrap();
+                format!("{}/{}", src, first.name)
+            });
+
+            println!("\n── Install ──");
+            if let Some(ex) = example {
+                println!("  tsr skills install {} --client <client-id>", ex);
+            } else {
+                println!("  tsr skills install <source>/<skill-name> --client <client-id>");
+            }
+
+            // List clients that support skills
+            let skill_clients: Vec<String> = REGISTRY
+                .iter()
+                .filter(|c| platform_skills_path(c).is_some())
+                .map(|c| format!("  {:<20} ({})", c.id, c.name))
+                .collect();
+            println!("\n── Clients that support skills ──");
+            for c in &skill_clients {
+                println!("{}", c);
+            }
+        }
+        Err(e) => {
+            eprintln!("Search failed: {}", e);
+            process::exit(1);
+        }
+    }
+}
+
+fn cmd_skills_remove(name: String, client: String) {
+    let (client_name, skills_path) = resolve_client_skills_path(&client);
+
+    let skill_path = format!("{}/{}", skills_path, name);
+
+    match delete_skill(skill_path) {
+        Ok(_) => println!("✓ Removed skill '{}' from {}", name, client_name),
+        Err(e) => {
+            eprintln!("Error removing skill '{}': {}", name, e);
+            process::exit(1);
         }
     }
 }

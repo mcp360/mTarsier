@@ -14,6 +14,8 @@ export const CLIENT_REGISTRY: ClientMeta[] = [
     configFormat: "json",
     detection: { kind: "app_bundle", path: "/Applications/Claude.app", pathWin: "%LOCALAPPDATA%\\Microsoft\\WindowsApps\\Claude.exe" },
     supportedTransports: ["stdio", "remote-mcp"],
+    supportsSkills: true,
+    skillsPath: "~/Library/Application Support/Claude/skills",
   },
   {
     id: "claude-code",
@@ -44,6 +46,7 @@ export const CLIENT_REGISTRY: ClientMeta[] = [
     configFormat: "json",
     detection: { kind: "none" },
     supportedTransports: ["sse", "streamable-http"],
+    supportsSkills: true,
     setupSteps: [
       { text: "Open claude.ai and sign in to your account." },
       { text: "Click your profile icon → Settings → Connectors." },
@@ -137,6 +140,8 @@ export const CLIENT_REGISTRY: ClientMeta[] = [
     isSharedFile: true,
     detection: { kind: "cli_binary", name: "codex" },
     supportedTransports: ["stdio", "remote-mcp"],
+    supportsSkills: true,
+    skillsPath: "~/.codex/skills",
   },
 
   // ── Google ───────────────────────────────────────────────────────────────
@@ -153,6 +158,8 @@ export const CLIENT_REGISTRY: ClientMeta[] = [
     isSharedFile: true,
     detection: { kind: "cli_binary", name: "gemini" },
     supportedTransports: ["stdio", "sse", "streamable-http"],
+    supportsSkills: true,
+    skillsPath: "~/.gemini/skills",
   },
   // ── OpenClaw ─────────────────────────────────────────────────────────────
   {
@@ -228,6 +235,8 @@ export const CLIENT_REGISTRY: ClientMeta[] = [
     configFormat: "json-opencode",
     detection: { kind: "cli_binary", name: "opencode" },
     supportedTransports: ["stdio", "sse", "remote-mcp"],
+    supportsSkills: true,
+    skillsPath: "~/.agents/skills",
   },
   {
     id: "antigravity",
@@ -241,6 +250,8 @@ export const CLIENT_REGISTRY: ClientMeta[] = [
     configFormat: "json",
     detection: { kind: "app_bundle", path: "/Applications/Antigravity.app", pathLinux: "/usr/bin/antigravity" },
     supportedTransports: ["stdio", "sse", "streamable-http"],
+    supportsSkills: true,
+    skillsPath: "~/.antigravity/skills",
   },
   {
     id: "github-copilot-cli",
