@@ -59,7 +59,7 @@ function ClientDropdown({
 }: {
   value: string;
   onChange: (v: string) => void;
-  options: Array<{ id: string; label: string }>;
+  options: Array<{ id: string; label: string; installed: boolean }>;
   placeholder: string;
 }) {
   return (
@@ -86,16 +86,19 @@ function ClientDropdown({
 
 export function ImportFlowDialog({ onClose }: Props) {
   const detectedClients = useClientStore((s) => s.clients);
-  const mcpTargets = getConfigurableClients();
-  const skillsTargets = CLIENT_REGISTRY.filter((c) => c.supportsSkills && c.configPath);
+  const mcpTargetOptions = getConfigurableClients();
+  const skillTargetOptions = CLIENT_REGISTRY.filter((c) => c.supportsSkills && c.configPath);
 
   const [tab, setTab] = useState<ImportTab>("mcp");
   const [flowData, setFlowData] = useState<FlowExport | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
 
-  const [mcpTarget, setMcpTarget] = useState("");
-  const [skillsTarget, setSkillsTarget] = useState("");
-  const [existingNames, setExistingNames] = useState<Set<string>>(new Set());
+  // Per-source-client target maps: sourceClientId -> targetClientId
+  const [mcpTargetMap, setMcpTargetMap] = useState<Record<string, string>>({});
+  const [skillTargetMap, setSkillTargetMap] = useState<Record<string, string>>({});
+
+  // Per-source-client existing server names (for conflict detection): sourceClientId -> Set<name>
+  const [existingNamesMap, setExistingNamesMap] = useState<Record<string, Set<string>>>({});
 
   const [selectedServers, setSelectedServers] = useState<Set<string>>(new Set());
   const [selectedSkills, setSelectedSkills] = useState<Set<string>>(new Set());
@@ -109,18 +112,21 @@ export function ImportFlowDialog({ onClose }: Props) {
   const allServers = clientsWithServers.flatMap((c) => c.servers);
   const allSkills = clientsWithSkills.flatMap((c) => c.skills);
 
-  const mcpOptions = mcpTargets.map((c) => {
+  // Build dropdown options lists with install status
+  const buildMcpOptions = () => mcpTargetOptions.map((c) => {
     const det = detectedClients.find((d) => d.meta.id === c.id);
     const count = det?.serverCount;
-    const label = det?.installed
+    const installed = !!det?.installed;
+    const label = installed
       ? `${c.name}${count != null ? `  (${count} server${count !== 1 ? "s" : ""})` : ""}`
-      : `${c.name}  (not detected)`;
-    return { id: c.id, label };
+      : `${c.name}  (not installed)`;
+    return { id: c.id, label, installed };
   });
 
-  const skillsOptions = skillsTargets.map((c) => {
+  const buildSkillOptions = () => skillTargetOptions.map((c) => {
     const det = detectedClients.find((d) => d.meta.id === c.id);
-    return { id: c.id, label: det?.installed ? c.name : `${c.name}  (not detected)` };
+    const installed = !!det?.installed;
+    return { id: c.id, label: installed ? c.name : `${c.name}  (not installed)`, installed };
   });
 
   async function handlePickFile() {
@@ -128,8 +134,9 @@ export function ImportFlowDialog({ onClose }: Props) {
     setFlowData(null);
     setImportResult(null);
     setImportError(null);
-    setMcpTarget("");
-    setSkillsTarget("");
+    setMcpTargetMap({});
+    setSkillTargetMap({});
+    setExistingNamesMap({});
     try {
       const raw = await invoke<string | null>("import_tsr");
       if (!raw) return;
@@ -141,23 +148,57 @@ export function ImportFlowDialog({ onClose }: Props) {
       setFlowData(parsed);
       setSelectedServers(new Set(parsed.clients.flatMap((c) => c.servers.map((s) => s.name))));
       setSelectedSkills(new Set(parsed.clients.flatMap((c) => c.skills.map((s) => s.name))));
+
+      // Auto-select same client as target if installed, otherwise leave empty
+      const initialMcpMap: Record<string, string> = {};
+      const initialSkillMap: Record<string, string> = {};
+      for (const fc of parsed.clients) {
+        const det = detectedClients.find((d) => d.meta.id === fc.id);
+        if (det?.installed) {
+          if (fc.servers.length > 0 && mcpTargetOptions.find((c) => c.id === fc.id)) {
+            initialMcpMap[fc.id] = fc.id;
+          }
+          if (fc.skills.length > 0 && skillTargetOptions.find((c) => c.id === fc.id)) {
+            initialSkillMap[fc.id] = fc.id;
+          }
+        }
+      }
+      setMcpTargetMap(initialMcpMap);
+      setSkillTargetMap(initialSkillMap);
     } catch (e) {
       setLoadError(String(e));
     }
   }
 
+  // Load existing servers for each source client when its MCP target changes
+  async function handleMcpTargetChange(sourceClientId: string, targetClientId: string) {
+    setMcpTargetMap((prev) => ({ ...prev, [sourceClientId]: targetClientId }));
+    if (!targetClientId) {
+      setExistingNamesMap((prev) => { const n = { ...prev }; delete n[sourceClientId]; return n; });
+      return;
+    }
+    const meta = mcpTargetOptions.find((c) => c.id === targetClientId);
+    if (!meta?.configPath || !meta.configKey) return;
+    try {
+      const entries = await invoke<McpServerEntry[]>("read_mcp_servers", {
+        configPath: meta.configPath,
+        configKey: meta.configKey,
+        configFormat: meta.configFormat,
+      });
+      setExistingNamesMap((prev) => ({ ...prev, [sourceClientId]: new Set(entries.map((e) => e.name)) }));
+    } catch {
+      setExistingNamesMap((prev) => ({ ...prev, [sourceClientId]: new Set() }));
+    }
+  }
+
+  // Load existing servers for auto-selected targets on file load
   useEffect(() => {
-    if (!mcpTarget) { setExistingNames(new Set()); return; }
-    const meta = mcpTargets.find((c) => c.id === mcpTarget);
-    if (!meta?.configPath || !meta.configKey) { setExistingNames(new Set()); return; }
-    invoke<McpServerEntry[]>("read_mcp_servers", {
-      configPath: meta.configPath,
-      configKey: meta.configKey,
-      configFormat: meta.configFormat,
-    })
-      .then((entries) => setExistingNames(new Set(entries.map((e) => e.name))))
-      .catch(() => setExistingNames(new Set()));
-  }, [mcpTarget]);
+    for (const [sourceId, targetId] of Object.entries(mcpTargetMap)) {
+      if (!existingNamesMap[sourceId] && targetId) {
+        handleMcpTargetChange(sourceId, targetId);
+      }
+    }
+  }, [mcpTargetMap]);
 
   function toggleServer(name: string) {
     setSelectedServers((prev) => { const n = new Set(prev); n.has(name) ? n.delete(name) : n.add(name); return n; });
@@ -167,62 +208,73 @@ export function ImportFlowDialog({ onClose }: Props) {
   }
 
   async function handleImport() {
-    const hasMcp = selectedServers.size > 0 && !!mcpTarget;
-    const hasSkills = selectedSkills.size > 0 && !!skillsTarget;
-    if (!hasMcp && !hasSkills) return;
+    if (!flowData) return;
     setImporting(true);
     setImportError(null);
     setImportResult(null);
+
     try {
       let totalServers = 0, totalSkills = 0;
-      const skippedClients: string[] = [], skippedServers: string[] = [], errors: string[] = [];
+      const skippedServers: string[] = [], errors: string[] = [];
 
-      const sameTarget = mcpTarget && skillsTarget && mcpTarget === skillsTarget;
+      // Group selected servers by their chosen target client
+      const serversByTarget: Record<string, FlowClient[]> = {};
+      for (const fc of clientsWithServers) {
+        const targetId = mcpTargetMap[fc.id];
+        if (!targetId) continue;
+        const servers = fc.servers.filter((s) => selectedServers.has(s.name));
+        if (servers.length === 0) continue;
+        if (!serversByTarget[targetId]) serversByTarget[targetId] = [];
+        serversByTarget[targetId].push({ ...fc, servers, skills: [] });
+      }
 
-      if (hasMcp) {
+      // Group selected skills by their chosen target client
+      const skillsByTarget: Record<string, FlowClient[]> = {};
+      for (const fc of clientsWithSkills) {
+        const targetId = skillTargetMap[fc.id];
+        if (!targetId) continue;
+        const skills = fc.skills.filter((s) => selectedSkills.has(s.name));
+        if (skills.length === 0) continue;
+        if (!skillsByTarget[targetId]) skillsByTarget[targetId] = [];
+        skillsByTarget[targetId].push({ ...fc, servers: [], skills });
+      }
+
+      // Collect all unique target client IDs
+      const allTargets = new Set([...Object.keys(serversByTarget), ...Object.keys(skillsByTarget)]);
+
+      for (const targetId of allTargets) {
+        const serverClients = serversByTarget[targetId] ?? [];
+        const skillClients = skillsByTarget[targetId] ?? [];
+
+        // Merge into a combined client list for this target
+        const mergedClients: FlowClient[] = [];
+        const seenIds = new Set<string>();
+        for (const fc of [...serverClients, ...skillClients]) {
+          if (seenIds.has(fc.id)) {
+            const existing = mergedClients.find((c) => c.id === fc.id)!;
+            existing.servers.push(...fc.servers);
+            existing.skills.push(...fc.skills);
+          } else {
+            mergedClients.push({ ...fc, servers: [...fc.servers], skills: [...fc.skills] });
+            seenIds.add(fc.id);
+          }
+        }
+
         const r = await invoke<FlowImportResult>("import_flow", {
-          content: JSON.stringify({
-            ...flowData,
-            clients: flowData!.clients.map((c) => ({
-              ...c,
-              servers: c.servers.filter((s) => selectedServers.has(s.name)),
-              skills: sameTarget ? c.skills.filter((s) => selectedSkills.has(s.name)) : [],
-            })),
-          }),
-          targetClientId: mcpTarget,
-          installSkills: !!sameTarget && hasSkills,
+          content: JSON.stringify({ ...flowData, clients: mergedClients }),
+          targetClientId: targetId,
+          installSkills: skillClients.length > 0,
         });
         totalServers += r.imported_servers;
         totalSkills += r.imported_skills;
-        skippedClients.push(...r.skipped_clients);
         skippedServers.push(...r.skipped_servers);
         errors.push(...r.errors);
       }
 
-      if (hasSkills && !sameTarget) {
-        const r = await invoke<FlowImportResult>("import_flow", {
-          content: JSON.stringify({
-            ...flowData,
-            clients: flowData!.clients.map((c) => ({
-              ...c,
-              servers: [],
-              skills: c.skills.filter((s) => selectedSkills.has(s.name)),
-            })),
-          }),
-          targetClientId: skillsTarget,
-          installSkills: true,
-        });
-        totalSkills += r.imported_skills;
-        skippedClients.push(...r.skipped_clients);
-        errors.push(...r.errors);
-      }
-
-      if (!hasMcp && hasSkills && !skillsTarget) return;
-
       setImportResult({
         imported_servers: totalServers,
         imported_skills: totalSkills,
-        skipped_clients: [...new Set(skippedClients)],
+        skipped_clients: [],
         skipped_servers: [...new Set(skippedServers)],
         errors,
       });
@@ -233,11 +285,17 @@ export function ImportFlowDialog({ onClose }: Props) {
     }
   }
 
-  const canImport = (selectedServers.size > 0 && !!mcpTarget) || (selectedSkills.size > 0 && !!skillsTarget);
-  const importLabel = [
-    selectedServers.size > 0 && mcpTarget ? `${selectedServers.size} server${selectedServers.size !== 1 ? "s" : ""}` : null,
-    selectedSkills.size > 0 && skillsTarget ? `${selectedSkills.size} skill${selectedSkills.size !== 1 ? "s" : ""}` : null,
-  ].filter(Boolean).join(" + ");
+  // Can import if at least one source group has a target and selected items
+  const hasMcpToImport = clientsWithServers.some(
+    (fc) => mcpTargetMap[fc.id] && fc.servers.some((s) => selectedServers.has(s.name))
+  );
+  const hasSkillsToImport = clientsWithSkills.some(
+    (fc) => skillTargetMap[fc.id] && fc.skills.some((s) => selectedSkills.has(s.name))
+  );
+  const canImport = hasMcpToImport || hasSkillsToImport;
+
+  const mcpOptions = buildMcpOptions();
+  const skillOptions = buildSkillOptions();
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center">
@@ -266,9 +324,10 @@ export function ImportFlowDialog({ onClose }: Props) {
           {loadError && <p className="text-xs text-red-400 mt-2">{loadError}</p>}
         </div>
 
-        {/* Tabs — only shown after file loaded */}
+        {/* Tabs + content */}
         {flowData && (
           <>
+            {/* Tabs */}
             <div className="flex gap-1 px-5 border-b border-border flex-shrink-0">
               {(["mcp", "skills"] as ImportTab[]).map((t) => (
                 <button
@@ -276,92 +335,85 @@ export function ImportFlowDialog({ onClose }: Props) {
                   onClick={() => setTab(t)}
                   className={cn(
                     "text-xs px-3 py-2 border-b-2 -mb-px transition-colors",
-                    tab === t
-                      ? "border-primary text-primary"
-                      : "border-transparent text-text-muted hover:text-text"
+                    tab === t ? "border-primary text-primary" : "border-transparent text-text-muted hover:text-text"
                   )}
                 >
-                  {t === "mcp" ? (
-                    <span>MCP Servers <span className="ml-1 text-[10px] opacity-70">{selectedServers.size}/{allServers.length}</span></span>
-                  ) : (
-                    <span>Skills <span className="ml-1 text-[10px] opacity-70">{selectedSkills.size}/{allSkills.length}</span></span>
-                  )}
+                  {t === "mcp"
+                    ? <span>MCP Servers <span className="ml-1 text-[10px] opacity-70">{selectedServers.size}/{allServers.length}</span></span>
+                    : <span>Skills <span className="ml-1 text-[10px] opacity-70">{selectedSkills.size}/{allSkills.length}</span></span>
+                  }
                 </button>
               ))}
             </div>
 
-            {/* Tab content */}
-            <div className="flex flex-col min-h-0 flex-1 overflow-y-auto">
+            {/* Select all bar */}
+            <div className="flex items-center justify-between px-5 py-2 border-b border-border flex-shrink-0">
+              <span className="text-[10px] text-text-muted uppercase tracking-wider font-medium">
+                {tab === "mcp" ? "MCP Servers" : "Skills"}
+              </span>
+              <button
+                onClick={() => {
+                  if (tab === "mcp") {
+                    setSelectedServers(
+                      selectedServers.size === allServers.length
+                        ? new Set()
+                        : new Set(allServers.map((s) => s.name))
+                    );
+                  } else {
+                    setSelectedSkills(
+                      selectedSkills.size === allSkills.length
+                        ? new Set()
+                        : new Set(allSkills.map((s) => s.name))
+                    );
+                  }
+                }}
+                className="text-[10px] text-primary hover:text-primary/70 transition-colors"
+              >
+                {tab === "mcp"
+                  ? (selectedServers.size === allServers.length ? "Deselect all" : "Select all")
+                  : (selectedSkills.size === allSkills.length ? "Deselect all" : "Select all")
+                }
+              </button>
+            </div>
 
-              {/* Target client + select all bar */}
-              <div className="px-5 py-3 border-b border-border flex-shrink-0 space-y-2">
-                {tab === "mcp" ? (
-                  <>
-                    <div className="flex items-center justify-between">
-                      <label className="text-[10px] font-medium text-text-muted uppercase tracking-wider">
-                        Import into
-                      </label>
-                      <label className="flex items-center gap-1.5 cursor-pointer select-none">
-                        <input
-                          type="checkbox"
-                          checked={allServers.length > 0 && selectedServers.size === allServers.length}
-                          onChange={(e) => setSelectedServers(
-                            e.target.checked ? new Set(allServers.map((s) => s.name)) : new Set()
-                          )}
-                          className="accent-primary"
-                        />
-                        <span className="text-[10px] text-text-muted">Select all</span>
-                      </label>
-                    </div>
-                    <ClientDropdown
-                      value={mcpTarget}
-                      onChange={setMcpTarget}
-                      options={mcpOptions}
-                      placeholder="Pick a client…"
-                    />
-                  </>
-                ) : (
-                  <>
-                    <div className="flex items-center justify-between">
-                      <label className="text-[10px] font-medium text-text-muted uppercase tracking-wider">
-                        Install into
-                      </label>
-                      <label className="flex items-center gap-1.5 cursor-pointer select-none">
-                        <input
-                          type="checkbox"
-                          checked={allSkills.length > 0 && selectedSkills.size === allSkills.length}
-                          onChange={(e) => setSelectedSkills(
-                            e.target.checked ? new Set(allSkills.map((s) => s.name)) : new Set()
-                          )}
-                          className="accent-primary"
-                        />
-                        <span className="text-[10px] text-text-muted">Select all</span>
-                      </label>
-                    </div>
-                    <ClientDropdown
-                      value={skillsTarget}
-                      onChange={setSkillsTarget}
-                      options={skillsOptions}
-                      placeholder="Pick a client…"
-                    />
-                  </>
-                )}
-              </div>
+            {/* Scrollable list */}
+            <div className="flex-1 overflow-y-auto">
 
-              {/* Items list */}
-              <div className="px-4 py-2">
-                {tab === "mcp" && (
-                  allServers.length === 0 ? (
-                    <p className="text-xs text-text-muted text-center py-6">No MCP servers in this flow file.</p>
-                  ) : (
-                    clientsWithServers.map((client) => (
-                      <div key={client.id}>
-                        <p className="text-[10px] font-medium text-text-muted/60 uppercase tracking-wider px-1 pt-3 pb-1.5">
-                          from {client.name}
-                        </p>
-                        <div className="space-y-1.5">
-                          {client.servers.map((s) => {
-                            const conflict = existingNames.has(s.name);
+              {/* ── MCP tab ── */}
+              {tab === "mcp" && (
+                allServers.length === 0
+                  ? <p className="text-xs text-text-muted text-center py-10">No MCP servers in this flow file.</p>
+                  : clientsWithServers.map((fc) => {
+                    const existing = existingNamesMap[fc.id] ?? new Set<string>();
+                    const isSourceInstalled = !!detectedClients.find((d) => d.meta.id === fc.id)?.installed;
+                    return (
+                      <div key={fc.id} className="border-b border-border last:border-b-0">
+                        {/* Source client header + its own target dropdown */}
+                        <div className="px-5 pt-3 pb-2 space-y-2">
+                          <div className="flex items-center gap-2">
+                            <p className="text-[10px] font-semibold text-text-muted uppercase tracking-wider">
+                              From {fc.name}
+                            </p>
+                            {!isSourceInstalled && (
+                              <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-500/15 text-amber-400">
+                                not installed
+                              </span>
+                            )}
+                          </div>
+                          {mcpTargetMap[fc.id] !== undefined || true ? (
+                            <ClientDropdown
+                              value={mcpTargetMap[fc.id] ?? ""}
+                              onChange={(v) => handleMcpTargetChange(fc.id, v)}
+                              options={mcpOptions}
+                              placeholder="Import into…"
+                            />
+                          ) : null}
+                        </div>
+
+                        {/* Servers list */}
+                        <div className="px-4 pb-3 space-y-1.5">
+                          {fc.servers.map((s) => {
+                            const conflict = existing.has(s.name);
                             const summary = serverSummary(s);
                             return (
                               <label
@@ -395,21 +447,41 @@ export function ImportFlowDialog({ onClose }: Props) {
                           })}
                         </div>
                       </div>
-                    ))
-                  )
-                )}
+                    );
+                  })
+              )}
 
-                {tab === "skills" && (
-                  allSkills.length === 0 ? (
-                    <p className="text-xs text-text-muted text-center py-6">No skills in this flow file.</p>
-                  ) : (
-                    clientsWithSkills.map((client) => (
-                      <div key={client.id}>
-                        <p className="text-[10px] font-medium text-text-muted/60 uppercase tracking-wider px-1 pt-3 pb-1.5">
-                          from {client.name}
-                        </p>
-                        <div className="space-y-1.5">
-                          {client.skills.map((s) => (
+              {/* ── Skills tab ── */}
+              {tab === "skills" && (
+                allSkills.length === 0
+                  ? <p className="text-xs text-text-muted text-center py-10">No skills in this flow file.</p>
+                  : clientsWithSkills.map((fc) => {
+                    const isSourceInstalled = !!detectedClients.find((d) => d.meta.id === fc.id)?.installed;
+                    return (
+                      <div key={fc.id} className="border-b border-border last:border-b-0">
+                        {/* Source client header + its own target dropdown */}
+                        <div className="px-5 pt-3 pb-2 space-y-2">
+                          <div className="flex items-center gap-2">
+                            <p className="text-[10px] font-semibold text-text-muted uppercase tracking-wider">
+                              From {fc.name}
+                            </p>
+                            {!isSourceInstalled && (
+                              <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-500/15 text-amber-400">
+                                not installed
+                              </span>
+                            )}
+                          </div>
+                          <ClientDropdown
+                            value={skillTargetMap[fc.id] ?? ""}
+                            onChange={(v) => setSkillTargetMap((prev) => ({ ...prev, [fc.id]: v }))}
+                            options={skillOptions}
+                            placeholder="Install into…"
+                          />
+                        </div>
+
+                        {/* Skills list */}
+                        <div className="px-4 pb-3 space-y-1.5">
+                          {fc.skills.map((s) => (
                             <label
                               key={s.name}
                               className={cn(
@@ -433,10 +505,9 @@ export function ImportFlowDialog({ onClose }: Props) {
                           ))}
                         </div>
                       </div>
-                    ))
-                  )
-                )}
-              </div>
+                    );
+                  })
+              )}
             </div>
           </>
         )}
@@ -482,7 +553,7 @@ export function ImportFlowDialog({ onClose }: Props) {
               className="px-3.5 py-1.5 text-xs font-medium bg-primary text-base rounded-md hover:bg-primary-dim
                 disabled:opacity-40 disabled:cursor-not-allowed"
             >
-              {importing ? "Importing…" : importLabel ? `Import ${importLabel}` : "Import"}
+              {importing ? "Importing…" : "Import"}
             </button>
           )}
         </div>
