@@ -31,6 +31,8 @@ export interface ClientMeta {
   supportsSkills?: boolean;
   /** Global skills directory path, e.g. ~/.claude/skills */
   skillsPath?: string;
+  /** Agent ID used with `npx skills add --agent <id>` (vercel-labs/skills). Undefined = use file-copy fallback. */
+  npxAgentId?: string;
 }
 
 export interface ClientState {

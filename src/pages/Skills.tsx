@@ -26,15 +26,7 @@ function Skills() {
   // Filter out false positives: clients marked as installed but whose binary doesn't actually exist
   // This happens when only config files exist (e.g. ~/.gemini/ or ~/.config/opencode/)
   const detectedMetas = clientStates
-    .filter((cs) => {
-      // Only show as installed if:
-      // 1. detection says installed AND
-      // 2. either has servers configured OR is not a CLI tool with just empty config
-      const hasServers = (cs.serverCount ?? 0) > 0;
-      const isCliWithOnlyConfig = cs.meta.detection.kind === "cli_binary" && cs.configExists && !hasServers;
-
-      return cs.installed && !isCliWithOnlyConfig;
-    })
+    .filter((cs) => cs.installed)
     .map((cs) => cs.meta);
   const clients = getSkillableClients(detectedMetas);
   const { selectedClientId, skills, isLoading, setSelectedClient, loadSkills, writeSkill, deleteSkill, deleteSkills } = useSkillStore();
@@ -635,16 +627,18 @@ function DiscoverTab({
       throw new Error("Please select at least one client or custom folder");
     }
 
-    // Get target paths for selected clients plus any custom paths
+    // Split selected clients: npx-capable vs file-copy
+    const selectedClients = clientIds.map((id) => clients.find((c) => c.id === id)).filter(Boolean);
+    const npxAgentIds = selectedClients.filter((c) => c!.npxAgentId).map((c) => c!.npxAgentId!);
+    const npxFallbackPaths = selectedClients
+      .filter((c) => c!.npxAgentId && c!.skillsPath)
+      .map((c) => c!.skillsPath!);
     const targetPaths = [
-      ...clientIds
-        .map((id) => clients.find((c) => c.id === id))
-        .filter((c) => c?.skillsPath)
-        .map((c) => c!.skillsPath),
+      ...selectedClients.filter((c) => !c!.npxAgentId && c!.skillsPath).map((c) => c!.skillsPath!),
       ...customPaths,
     ];
 
-    if (targetPaths.length === 0) {
+    if (npxAgentIds.length === 0 && targetPaths.length === 0) {
       throw new Error("No valid client paths selected for installation");
     }
 
@@ -655,6 +649,8 @@ function DiscoverTab({
       const installedName = await invoke<string>("skills_install", {
         source: installSource,
         targetPaths,
+        npxAgentIds,
+        npxFallbackPaths,
         requestedName: pendingInstall.name,
       });
       onInstalled(installedName || pendingInstall.name, clientIds);

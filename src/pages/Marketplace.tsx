@@ -567,12 +567,17 @@ function SkillsDiscoverSection({ showToast }: { showToast: (msg: string) => void
       throw new Error("Please select at least one client");
     }
 
-    const targetPaths = clientIds
-      .map((id) => clients.find((c) => c.id === id))
-      .filter((c) => c?.skillsPath)
-      .map((c) => c!.skillsPath);
+    // Split selected clients: npx-capable vs file-copy
+    const selectedClients = clientIds.map((id) => clients.find((c) => c.id === id)).filter(Boolean);
+    const npxAgentIds = selectedClients.filter((c) => c!.npxAgentId).map((c) => c!.npxAgentId!);
+    const npxFallbackPaths = selectedClients
+      .filter((c) => c!.npxAgentId && c!.skillsPath)
+      .map((c) => c!.skillsPath!);
+    const targetPaths = selectedClients
+      .filter((c) => !c!.npxAgentId && c!.skillsPath)
+      .map((c) => c!.skillsPath!);
 
-    if (targetPaths.length === 0) {
+    if (npxAgentIds.length === 0 && targetPaths.length === 0) {
       throw new Error("No valid client paths selected for installation");
     }
 
@@ -582,6 +587,8 @@ function SkillsDiscoverSection({ showToast }: { showToast: (msg: string) => void
       const installedName = await invoke<string>("skills_install", {
         source: installSource,
         targetPaths,
+        npxAgentIds,
+        npxFallbackPaths,
         requestedName: pendingInstall.name,
       });
       showToast(`"${installedName || pendingInstall.name}" installed for ${clientIds.length} client${clientIds.length > 1 ? "s" : ""}`);
