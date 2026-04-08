@@ -69,5 +69,11 @@ export const useSkillStore = create<SkillStore>((set, get) => ({
 }));
 
 export function getSkillableClients(detectedClients: ClientMeta[]): ClientMeta[] {
-  return detectedClients.filter((c) => c.supportsSkills && c.skillsPath);
+  const seen = new Set<string>();
+  return detectedClients.filter((c) => {
+    if (!c.supportsSkills || !c.skillsPath) return false;
+    if (seen.has(c.skillsPath)) return false;
+    seen.add(c.skillsPath);
+    return true;
+  });
 }

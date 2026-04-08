@@ -15,6 +15,8 @@ import VideoModal from "../components/marketplace/VideoModal";
 import RegistrySkillCard from "../components/skills/RegistrySkillCard";
 import InstallSkillDialog from "../components/skills/InstallSkillDialog";
 import SkillCard from "../components/skills/SkillCard";
+import ViewSkillDialog from "../components/skills/ViewSkillDialog";
+import CopySkillDialog from "../components/skills/CopySkillDialog";
 import type { SkillSearchResult } from "../components/skills/RegistrySkillCard";
 import type { InstalledSkill } from "../store/skillStore";
 
@@ -417,6 +419,9 @@ function SkillsDiscoverSection({ showToast }: { showToast: (msg: string) => void
   // For installed skills
   const [allSkills, setAllSkills] = useState<Array<InstalledSkill & { clientName: string; clientId: string }>>([]);
   const [loadingSkills, setLoadingSkills] = useState(false);
+  const [viewingSkill, setViewingSkill] = useState<InstalledSkill | null>(null);
+  const [copyingSkill, setCopyingSkill] = useState<InstalledSkill | null>(null);
+  const [deletingSkill, setDeletingSkill] = useState<InstalledSkill | null>(null);
 
   // Load all skills when switching to installed view
   useEffect(() => {
@@ -843,9 +848,9 @@ function SkillsDiscoverSection({ showToast }: { showToast: (msg: string) => void
                         showToast(String(e));
                       }
                     }}
-                    onView={() => {}}
-                    onCopyTo={() => {}}
-                    onDelete={() => {}}
+                    onView={() => setViewingSkill(skill)}
+                    onCopyTo={() => setCopyingSkill(skill)}
+                    onDelete={() => setDeletingSkill(skill)}
                   />
                   {selectedClientId === "all" && (
                     <div className="absolute bottom-2 right-2">
@@ -867,6 +872,49 @@ function SkillsDiscoverSection({ showToast }: { showToast: (msg: string) => void
           onClose={() => setPendingInstall(null)}
           onInstall={handleInstallConfirm}
         />
+      )}
+
+      {viewingSkill && (
+        <ViewSkillDialog skill={viewingSkill} onClose={() => setViewingSkill(null)} />
+      )}
+
+      {copyingSkill && (
+        <CopySkillDialog
+          skill={copyingSkill}
+          sourceClientId={((copyingSkill as InstalledSkill & { clientId?: string }).clientId) ?? ""}
+          onClose={() => setCopyingSkill(null)}
+          onCopy={async (targetClientIds, _skill) => {
+            for (const id of targetClientIds) {
+              const target = clients.find((c) => c.id === id);
+              if (target?.skillsPath) {
+                await invoke("write_skill", { skillsPath: target.skillsPath, skillName: copyingSkill.name, content: copyingSkill.raw_content });
+              }
+            }
+            setCopyingSkill(null);
+            showToast(`"${copyingSkill.name}" copied to ${targetClientIds.length} client${targetClientIds.length > 1 ? "s" : ""}`);
+          }}
+        />
+      )}
+
+      {deletingSkill && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60">
+          <div className="w-full max-w-xs rounded-xl border border-border bg-surface p-5 shadow-2xl space-y-4">
+            <p className="text-sm font-semibold text-text">Delete skill?</p>
+            <p className="text-xs text-text-muted">This will permanently delete <span className="text-text font-medium">"{deletingSkill.name}"</span>.</p>
+            <div className="flex justify-end gap-2">
+              <button onClick={() => setDeletingSkill(null)} className="text-xs px-4 py-2 rounded-lg border border-border text-text-muted hover:text-text transition-colors">Cancel</button>
+              <button
+                onClick={async () => {
+                  await invoke("delete_skill", { skillPath: deletingSkill.path });
+                  setDeletingSkill(null);
+                  setAllSkills((prev) => prev.filter((sk) => sk.path !== deletingSkill.path));
+                  showToast(`Deleted "${deletingSkill.name}"`);
+                }}
+                className="text-xs font-medium px-4 py-2 rounded-lg bg-red-500/10 border border-red-500/30 text-red-400 hover:bg-red-500/15 transition-colors"
+              >Delete</button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );
