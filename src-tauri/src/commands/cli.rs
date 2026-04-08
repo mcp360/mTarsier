@@ -1,4 +1,5 @@
 use std::path::PathBuf;
+use super::utils::silent_command;
 use tauri::Manager;
 
 #[derive(serde::Serialize)]
@@ -134,7 +135,7 @@ pub fn check_cli_installed() -> Option<String> {
     #[cfg(windows)]
     let which = "where";
 
-    if let Ok(out) = std::process::Command::new(which).arg("tsr").output() {
+    if let Ok(out) = silent_command(which).arg("tsr").output() {
         if out.status.success() {
             let path = String::from_utf8_lossy(&out.stdout).trim().to_string();
             if !path.is_empty() {

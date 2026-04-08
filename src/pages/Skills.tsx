@@ -73,8 +73,16 @@ function Skills() {
   };
 
   const handleDelete = async () => {
-    if (!deleting || !selectedClientId || !selectedClient) return;
-    await deleteSkill(deleting.path, selectedClient.skillsPath);
+    if (!deleting) return;
+    let skillsPath: string | undefined;
+    if (selectedClientId === "all") {
+      const withClient = deleting as InstalledSkill & { clientId?: string };
+      skillsPath = clients.find((c) => c.id === withClient.clientId)?.skillsPath;
+    } else {
+      if (!selectedClient) return;
+      skillsPath = selectedClient.skillsPath;
+    }
+    await deleteSkill(deleting.path, skillsPath);
     setDeleting(null);
     showToast(`Deleted "${deleting.name}"`);
   };
