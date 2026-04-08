@@ -15,7 +15,7 @@ interface SkillStore {
   isLoading: boolean;
   error: string | null;
   setSelectedClient: (id: string) => void;
-  loadSkills: (skillsPath: string | undefined) => Promise<void>;
+  loadSkills: (skillsPath: string | undefined, forceRefresh?: boolean) => Promise<void>;
   writeSkill: (skillsPath: string, name: string, content: string) => Promise<void>;
   deleteSkill: (path: string, skillsPath: string | undefined) => Promise<void>;
   deleteSkills: (paths: string[], skillsPath: string | undefined) => Promise<void>;
@@ -31,14 +31,15 @@ export const useSkillStore = create<SkillStore>((set, get) => ({
     set({ selectedClientId: id });
   },
 
-  loadSkills: async (skillsPath) => {
+  loadSkills: async (skillsPath, forceRefresh = false) => {
     if (!skillsPath) {
       set({ skills: [], error: null, isLoading: false });
       return;
     }
-    // Only show loading if we don't have skills already (prevents flicker on tab switch)
+    // Only show loading spinner if we don't have skills already (prevents flicker on tab switch)
+    // But always fetch fresh data
     const hasExistingSkills = get().skills.length > 0;
-    if (!hasExistingSkills) {
+    if (!hasExistingSkills || forceRefresh) {
       set({ isLoading: true, error: null });
     }
     try {

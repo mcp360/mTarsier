@@ -65,8 +65,17 @@ function Skills() {
   };
 
   const handleDelete = async () => {
-    if (!deleting || !selectedClientId || !selectedClient) return;
-    await deleteSkill(deleting.path, selectedClient.skillsPath);
+    if (!deleting) return;
+    let skillsPath: string | undefined;
+    if (selectedClientId === "all") {
+      const withClient = deleting as InstalledSkill & { clientId?: string };
+      skillsPath = clients.find((c) => c.id === withClient.clientId)?.skillsPath;
+    } else {
+      if (!selectedClient) return;
+      skillsPath = selectedClient.skillsPath;
+    }
+    if (!skillsPath) return;
+    await deleteSkill(deleting.path, skillsPath);
     setDeleting(null);
     showToast(`Deleted "${deleting.name}"`);
   };
@@ -85,14 +94,14 @@ function Skills() {
       const firstClient = clients.find((c) => c.id === clientIds[0]);
       setSelectedClient(clientIds[0]);
       if (firstClient?.skillsPath) {
-        loadSkills(firstClient.skillsPath);
+        loadSkills(firstClient.skillsPath, true);
       }
       showToast(`"${name}" installed for ${clientIds.length} client${clientIds.length > 1 ? "s" : ""}`);
       return;
     }
     showToast(`"${name}" installed globally`);
     if (selectedClientId && selectedClient?.skillsPath) {
-      loadSkills(selectedClient.skillsPath);
+      loadSkills(selectedClient.skillsPath, true);
     }
   };
 
@@ -136,8 +145,11 @@ function Skills() {
       {adding && selectedClient && (
         <AddSkillDialog
           clientName={selectedClient.name}
+          skillsPath={selectedClient.skillsPath}
+          npxAgentId={selectedClient.npxAgentId}
           onClose={() => setAdding(false)}
           onCreate={handleAddSkill}
+          onNpxInstall={() => selectedClient.skillsPath && loadSkills(selectedClient.skillsPath, true)}
         />
       )}
       {viewing && (

@@ -701,7 +701,7 @@ pub fn skills_install_blocking(
 #[tauri::command]
 /// Try installing via `npx skills add` for a list of agent IDs.
 /// Returns Ok(installed_count) or Err if npx is unavailable / fails.
-fn skills_install_via_npx(
+pub fn skills_install_via_npx(
     source: &str,
     agent_ids: &[String],
     requested_name: Option<&str>,

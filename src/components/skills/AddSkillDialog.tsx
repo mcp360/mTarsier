@@ -1,13 +1,17 @@
 import { useState, useRef } from "react";
-import { X, Upload, FileText, Edit3 } from "lucide-react";
+import { X, Upload, FileText, Edit3, Terminal } from "lucide-react";
+import { invoke } from "@tauri-apps/api/core";
 
 interface Props {
   clientName: string;
+  skillsPath?: string;
+  npxAgentId?: string;
   onClose: () => void;
   onCreate: (skillName: string, content: string) => Promise<void>;
+  onNpxInstall?: () => void;
 }
 
-type InputMode = "manual" | "upload" | "paste";
+type InputMode = "manual" | "upload" | "paste" | "npx";
 
 const DEFAULT_BODY = `## Goal
 Describe what this skill should accomplish.
@@ -42,15 +46,62 @@ function parseSkillMd(content: string): { name: string; description: string; bod
   };
 }
 
-export default function AddSkillDialog({ clientName, onClose, onCreate }: Props) {
+export default function AddSkillDialog({ clientName, skillsPath, npxAgentId, onClose, onCreate, onNpxInstall }: Props) {
   const [mode, setMode] = useState<InputMode>("manual");
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
   const [body, setBody] = useState(DEFAULT_BODY);
   const [pastedContent, setPastedContent] = useState("");
+  const [npxCommand, setNpxCommand] = useState("");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const parseNpxSource = (cmd: string): string | null => {
+    const trimmed = cmd.trim();
+    // Extract all tokens after "npx skills add", skip flags (--flag)
+    const afterAdd = trimmed.match(/npx\s+skills\s+add\s+(.*)/);
+    if (afterAdd) {
+      const token = afterAdd[1].split(/\s+/).find((t) => !t.startsWith('-'));
+      return token ?? null;
+    }
+    // If no slash at all → not a valid source
+    if (!trimmed.includes('/')) return null;
+    return trimmed;
+  };
+
+  const handleNpxInstall = async () => {
+    const source = parseNpxSource(npxCommand);
+    if (!source) {
+      setError("Enter a valid command like: npx skills add obra/superpowers/brainstorming");
+      return;
+    }
+    const sourcePattern = /^[a-zA-Z0-9._-]+\/[a-zA-Z0-9._-]+(\/[a-zA-Z0-9._-]+)?$/;
+    if (!sourcePattern.test(source)) {
+      setError("Invalid skill source format. Expected: owner/repo or owner/repo/skill-name");
+      return;
+    }
+    setSaving(true);
+    setError(null);
+    try {
+      const npxAgentIds = npxAgentId ? [npxAgentId] : [];
+      const npxFallbackPaths = npxAgentId && skillsPath ? [skillsPath] : [];
+      const targetPaths = !npxAgentId && skillsPath ? [skillsPath] : [];
+      await invoke("skills_install", {
+        source,
+        targetPaths,
+        npxAgentIds,
+        npxFallbackPaths,
+        requestedName: null,
+      });
+      onNpxInstall?.();
+      onClose();
+    } catch (e) {
+      setError(String(e).replace(/^Error:\s*/i, ""));
+    } finally {
+      setSaving(false);
+    }
+  };
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -189,6 +240,17 @@ ${skillBody}
             <FileText size={14} />
             Paste Content
           </button>
+          <button
+            onClick={() => setMode("npx")}
+            className={`flex items-center gap-1.5 px-3 py-2 text-xs transition-colors border-b-2 -mb-px ${
+              mode === "npx"
+                ? "border-primary text-primary"
+                : "border-transparent text-text-muted hover:text-text"
+            }`}
+          >
+            <Terminal size={14} />
+            npx Command
+          </button>
         </div>
 
         <div className="space-y-4 p-5">
@@ -285,6 +347,24 @@ ${skillBody}
             </div>
           )}
 
+          {mode === "npx" && (
+            <div className="space-y-3">
+              <p className="text-[11px] text-text-muted">
+                Paste an <span className="font-mono text-text">npx skills add</span> command or a skill source (<span className="font-mono text-text">owner/repo/skill-name</span>).
+              </p>
+              <input
+                value={npxCommand}
+                onChange={(e) => setNpxCommand(e.target.value)}
+                placeholder="npx skills add obra/superpowers/brainstorming"
+                className="w-full rounded-lg border border-border bg-base px-3 py-2 text-xs text-text font-mono placeholder:text-text-muted/50 focus:border-primary/40 focus:outline-none"
+                onKeyDown={(e) => e.key === "Enter" && !saving && handleNpxInstall()}
+              />
+              <p className="text-[10px] text-text-muted/50">
+                Will install to <span className="font-mono">{clientName}</span> using {npxAgentId ? "npx" : "file copy"}.
+              </p>
+            </div>
+          )}
+
           {error && <p className="text-[11px] text-red-400">{error}</p>}
         </div>
 
@@ -313,6 +393,26 @@ ${skillBody}
               className="rounded-lg border border-border px-4 py-2 text-xs text-text-muted transition-colors hover:text-text"
             >
               Close
+            </button>
+          </div>
+        )}
+
+        {mode === "npx" && (
+          <div className="flex justify-end gap-2 border-t border-border px-5 py-4">
+            <button
+              onClick={onClose}
+              disabled={saving}
+              className="rounded-lg border border-border px-4 py-2 text-xs text-text-muted transition-colors hover:text-text disabled:opacity-50"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={handleNpxInstall}
+              disabled={saving || !npxCommand.trim()}
+              className="rounded-lg border border-primary/30 bg-primary/10 px-4 py-2 text-xs font-medium text-primary transition-colors hover:bg-primary/15 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+            >
+              {saving && <span className="inline-block w-3 h-3 border-2 border-primary/35 border-t-primary rounded-full animate-spin" />}
+              {saving ? "Installing…" : "Install Skill"}
             </button>
           </div>
         )}
