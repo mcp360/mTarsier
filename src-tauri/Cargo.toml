@@ -40,3 +40,5 @@ tauri-plugin-dialog = "2"
 tauri-plugin-updater = "2"
 clap = { version = "4", features = ["derive"] }
 fix-path-env = { git = "https://github.com/tauri-apps/fix-path-env-rs" }
+flate2 = "1"
+tar = "0.4"

@@ -178,11 +178,28 @@ pub fn import_flow(
         .unwrap_or_default()
         .trim()
         .to_string();
-    let raw_content = if raw_content.is_empty() { "{}".to_string() } else { raw_content };
-    let mut root: serde_json::Value = serde_json::from_str(&raw_content)
-        .map_err(|e| format!("Failed to parse target config: {e}"))?;
 
+    let config_format = target_client.config_format;
     let resolved_key = crate::commands::utils::expand_config_key(target_client.config_key);
+
+    // Parse config based on format (JSON, TOML, or json-opencode)
+    let mut root: serde_json::Value = match config_format {
+        "toml" => {
+            if raw_content.is_empty() {
+                serde_json::json!({})
+            } else {
+                let toml_val: toml::Value = toml::from_str(&raw_content)
+                    .map_err(|e| format!("Failed to parse target config: {e}"))?;
+                crate::commands::config::toml_to_json(toml_val)
+            }
+        }
+        _ => {
+            let c = if raw_content.is_empty() { "{}".to_string() } else { raw_content };
+            serde_json::from_str(&c)
+                .map_err(|e| format!("Failed to parse target config: {e}"))?
+        }
+    };
+
     let servers_obj = crate::commands::utils::ensure_json_path(&mut root, &resolved_key);
 
     for flow_client in &flow.clients {
@@ -288,10 +305,25 @@ pub fn import_flow(
         }
     }
 
-    // Write updated config back
-    let new_content =
-        serde_json::to_string_pretty(&root).map_err(|e| format!("Serialize error: {e}"))?;
-    crate::commands::config::write_raw_config(config_path.to_string(), new_content)?;
+    // Write updated config back in the correct format
+    let new_content = match config_format {
+        "toml" => {
+            let toml_val = crate::commands::config::json_to_toml(root)
+                .unwrap_or(toml::Value::Table(toml::map::Map::new()));
+            toml::to_string_pretty(&toml_val)
+                .map_err(|e| format!("Serialize error: {e}"))?
+        }
+        _ => serde_json::to_string_pretty(&root)
+            .map_err(|e| format!("Serialize error: {e}"))?
+    };
+
+    let abs_path = crate::commands::utils::expand_tilde(config_path);
+    if let Some(parent) = abs_path.parent() {
+        std::fs::create_dir_all(parent)
+            .map_err(|e| format!("Failed to create directories: {e}"))?;
+    }
+    std::fs::write(&abs_path, &new_content)
+        .map_err(|e| format!("Failed to write config: {e}"))?;
 
     Ok(result)
 }

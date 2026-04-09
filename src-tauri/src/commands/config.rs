@@ -20,7 +20,7 @@ pub struct WriteConfigRequest {
 
 // ─── TOML helpers ─────────────────────────────────────────────────────────────
 
-fn toml_to_json(v: toml::Value) -> serde_json::Value {
+pub fn toml_to_json(v: toml::Value) -> serde_json::Value {
     match v {
         toml::Value::String(s) => serde_json::Value::String(s),
         toml::Value::Integer(i) => serde_json::Value::Number(i.into()),
@@ -38,7 +38,7 @@ fn toml_to_json(v: toml::Value) -> serde_json::Value {
     }
 }
 
-fn json_to_toml(v: serde_json::Value) -> Option<toml::Value> {
+pub fn json_to_toml(v: serde_json::Value) -> Option<toml::Value> {
     match v {
         serde_json::Value::Null => None,
         serde_json::Value::Bool(b) => Some(toml::Value::Boolean(b)),
