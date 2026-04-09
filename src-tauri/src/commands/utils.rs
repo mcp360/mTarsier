@@ -62,6 +62,11 @@ pub fn ensure_json_path<'a>(
 }
 
 #[tauri::command]
+pub fn get_platform() -> &'static str {
+    std::env::consts::OS // "linux", "macos", "windows"
+}
+
+#[tauri::command]
 pub fn get_home_dir() -> Result<String, String> {
     dirs::home_dir()
         .map(|p| p.to_string_lossy().to_string())

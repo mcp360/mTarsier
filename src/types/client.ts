@@ -29,8 +29,10 @@ export interface ClientMeta {
   setupSteps?: Array<{ text: string; note?: string }>;
   /** True when the client supports the agentskills.io Skills standard. */
   supportsSkills?: boolean;
-  /** Global skills directory path, e.g. ~/.claude/skills */
+  /** Global skills directory path, e.g. ~/.claude/skills (macOS/Windows) */
   skillsPath?: string;
+  /** Linux-specific skills directory path, overrides skillsPath on Linux */
+  skillsPathLinux?: string;
 }
 
 export interface ClientState {

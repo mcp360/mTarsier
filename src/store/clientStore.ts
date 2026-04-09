@@ -8,6 +8,7 @@ interface ClientStore {
   filter: ClientType | "All";
   isDetecting: boolean;
   selectedClientId: string | null;
+  platform: string | null;
   setFilter: (filter: ClientType | "All") => void;
   selectClient: (id: string | null) => void;
   detectAll: () => Promise<void>;
@@ -23,6 +24,7 @@ export const useClientStore = create<ClientStore>((set, get) => ({
   filter: "All",
   isDetecting: false,
   selectedClientId: null,
+  platform: null,
 
   setFilter: (filter) => set({ filter }),
   selectClient: (id) => set({ selectedClientId: id }),
@@ -30,6 +32,20 @@ export const useClientStore = create<ClientStore>((set, get) => ({
   detectAll: async () => {
     if (get().isDetecting) return;
     set({ isDetecting: true });
+    const platform = get().platform ?? await invoke<string>("get_platform").catch(() => null);
+    if (platform && !get().platform) {
+      set({
+        platform,
+        // On Linux, replace platform-specific paths where Linux variants are defined.
+        clients: get().clients.map((cs) => {
+          if (platform !== "linux") return cs;
+          const patch: Partial<typeof cs.meta> = {};
+          if (cs.meta.configPathLinux) patch.configPath = cs.meta.configPathLinux;
+          if (cs.meta.skillsPathLinux) patch.skillsPath = cs.meta.skillsPathLinux;
+          return Object.keys(patch).length > 0 ? { ...cs, meta: { ...cs.meta, ...patch } } : cs;
+        }),
+      });
+    }
     try {
       const requests: DetectionRequest[] = CLIENT_REGISTRY.filter(
         (c) => c.detection.kind !== "none"
