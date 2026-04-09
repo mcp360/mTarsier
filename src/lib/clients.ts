@@ -12,10 +12,11 @@ export const CLIENT_REGISTRY: ClientMeta[] = [
     configPathLinux: "~/.config/Claude/claude_desktop_config.json",
     configKey: "mcpServers",
     configFormat: "json",
-    detection: { kind: "app_bundle", path: "/Applications/Claude.app", pathWin: "%LOCALAPPDATA%\\Microsoft\\WindowsApps\\Claude.exe" },
+    detection: { kind: "app_bundle", path: "/Applications/Claude.app", pathWin: "%LOCALAPPDATA%\\Microsoft\\WindowsApps\\Claude.exe", pathLinux: "~/.local/share/claude|/usr/lib/claude-desktop" },
     supportedTransports: ["stdio", "remote-mcp"],
     supportsSkills: true,
     skillsPath: "~/Library/Application Support/Claude/skills",
+    skillsPathLinux: "~/.config/Claude/skills",
   },
   {
     id: "claude-code",

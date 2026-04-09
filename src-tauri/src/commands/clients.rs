@@ -101,16 +101,22 @@ fn check_installed(kind: &str, value: Option<&str>) -> bool {
     match kind {
         "app_bundle" => {
             // expand_tilde handles %VAR% on Windows and ~/ on all platforms.
+            // Multiple paths may be separated by '|' to support fallback locations
+            // (e.g. "~/.local/share/claude|/usr/lib/claude-desktop" for Linux).
             if let Some(path) = value {
-                let expanded = expand_tilde(path);
-                if expanded.exists() {
-                    return true;
-                }
-                #[cfg(target_os = "macos")]
-                {
-                    if let (Some(home), Some(app_name)) = (dirs::home_dir(), expanded.file_name()) {
-                        // Some apps are installed per-user under ~/Applications instead of /Applications.
-                        return home.join("Applications").join(app_name).exists();
+                for candidate in path.split('|') {
+                    let expanded = expand_tilde(candidate.trim());
+                    if expanded.exists() {
+                        return true;
+                    }
+                    #[cfg(target_os = "macos")]
+                    {
+                        if let (Some(home), Some(app_name)) = (dirs::home_dir(), expanded.file_name()) {
+                            // Some apps are installed per-user under ~/Applications instead of /Applications.
+                            if home.join("Applications").join(app_name).exists() {
+                                return true;
+                            }
+                        }
                     }
                 }
                 false
