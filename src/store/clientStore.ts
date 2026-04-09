@@ -36,12 +36,14 @@ export const useClientStore = create<ClientStore>((set, get) => ({
     if (platform && !get().platform) {
       set({
         platform,
-        // On Linux, replace skillsPath with the Linux-specific path where defined.
-        clients: get().clients.map((cs) =>
-          platform === "linux" && cs.meta.skillsPathLinux
-            ? { ...cs, meta: { ...cs.meta, skillsPath: cs.meta.skillsPathLinux } }
-            : cs
-        ),
+        // On Linux, replace platform-specific paths where Linux variants are defined.
+        clients: get().clients.map((cs) => {
+          if (platform !== "linux") return cs;
+          const patch: Partial<typeof cs.meta> = {};
+          if (cs.meta.configPathLinux) patch.configPath = cs.meta.configPathLinux;
+          if (cs.meta.skillsPathLinux) patch.skillsPath = cs.meta.skillsPathLinux;
+          return Object.keys(patch).length > 0 ? { ...cs, meta: { ...cs.meta, ...patch } } : cs;
+        }),
       });
     }
     try {

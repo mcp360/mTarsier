@@ -26,7 +26,7 @@ export const CLIENT_REGISTRY: ClientMeta[] = [
     configPath: "~/.claude.json",
     configPathWin: "%USERPROFILE%\\.claude.json",
     configPathLinux: "~/.claude.json",
-    configKey: "projects.{HOME}.mcpServers",
+    configKey: "mcpServers",
     configFormat: "json",
     isSharedFile: true,
     supportsScopes: true,
