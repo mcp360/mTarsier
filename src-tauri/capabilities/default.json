@@ -12,6 +12,7 @@
     "shell:allow-open",
     "dialog:allow-open",
     "dialog:allow-save",
-    "core:tray:default"
+    "core:tray:default",
+    "deep-link:default"
   ]
 }

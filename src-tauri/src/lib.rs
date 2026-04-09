@@ -6,6 +6,8 @@ pub mod tray;
 use std::sync::Mutex;
 #[allow(unused_imports)]
 use tauri::Manager;
+use tauri::Emitter;
+use tauri::Listener;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -56,6 +58,7 @@ pub fn run() {
     .plugin(tauri_plugin_updater::Builder::new().build())
     .plugin(tauri_plugin_dialog::init())
     .plugin(tauri_plugin_shell::init())
+    .plugin(tauri_plugin_deep_link::init())
     .setup(|app| {
       if cfg!(debug_assertions) {
         app.handle().plugin(
@@ -67,6 +70,21 @@ pub fn run() {
 
       // Setup macOS menu bar icon
       tray::setup_tray(app)?;
+
+      // Deep link: bring window to front and emit URL to frontend
+      let handle = app.handle().clone();
+      app.listen("deep-link://new-url", move |event: tauri::Event| {
+        if let Some(main_win) = handle.get_webview_window("main") {
+          main_win.show().ok();
+          main_win.set_focus().ok();
+        }
+        // Payload is a JSON array of URL strings
+        if let Ok(urls) = serde_json::from_str::<Vec<String>>(event.payload()) {
+          if let Some(url) = urls.first() {
+            handle.emit("deep-link-received", url.clone()).ok();
+          }
+        }
+      });
 
       // macOS convention: red-X hides window instead of quitting
       #[cfg(target_os = "macos")]
