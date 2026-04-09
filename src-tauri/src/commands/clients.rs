@@ -201,7 +201,7 @@ pub fn detect_installed_clients_sync(clients: Vec<DetectionRequest>) -> Vec<Dete
             #[cfg(not(any(target_os = "windows", target_os = "linux")))]
             let detection_value = req.detection_value.as_deref();
 
-            let installed = check_installed(&req.detection_kind, detection_value);
+            let mut installed = check_installed(&req.detection_kind, detection_value);
 
             // Resolve platform-appropriate config path.
             #[cfg(target_os = "windows")]
@@ -217,6 +217,12 @@ pub fn detect_installed_clients_sync(clients: Vec<DetectionRequest>) -> Vec<Dete
             let config_exists = resolved_config_path
                 .map(|p| expand_tilde(p).exists())
                 .unwrap_or(false);
+
+            // Fallback: if binary/app detection failed but config file exists,
+            // the client is installed (covers missing detection paths, e.g. Antigravity on Windows).
+            if !installed && config_exists {
+                installed = true;
+            }
             let server_count = if config_exists {
                 if let (Some(cp), Some(ck)) = (resolved_config_path, req.config_key.as_deref()) {
                     if !ck.is_empty() {

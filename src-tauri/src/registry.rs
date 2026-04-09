@@ -31,7 +31,7 @@ pub static REGISTRY: &[ClientDef] = &[
         config_format: "json",
         detection_kind: "app_bundle",
         detection_value: Some("/Applications/Claude.app"),
-        detection_value_win: Some("%LOCALAPPDATA%\\Microsoft\\WindowsApps\\Claude.exe|%LOCALAPPDATA%\\AnthropicClaude\\claude.exe"),
+        detection_value_win: Some("%LOCALAPPDATA%\\Microsoft\\WindowsApps\\Claude.exe|%LOCALAPPDATA%\\AnthropicClaude\\Update.exe"),
         detection_value_linux: None,
         skills_path: Some("~/Library/Application Support/Claude/skills"),
         npx_agent_id: None,

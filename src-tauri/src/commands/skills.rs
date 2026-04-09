@@ -242,6 +242,18 @@ fn remove_symlinks_recursive(dir: &Path) {
     }
 }
 
+/// On Windows, strip the \\?\ extended-path prefix that confuses the built-in tar.
+fn path_for_cmd(path: &Path) -> String {
+    let s = path.to_string_lossy().into_owned();
+    #[cfg(target_os = "windows")]
+    {
+        if s.starts_with("\\\\?\\") {
+            return s[4..].to_string();
+        }
+    }
+    s
+}
+
 /// Extract tarball data to target directory
 fn extract_tarball(tarball_data: &[u8], extract_to: &Path, owner: &str, repo: &str) -> Result<(), String> {
     std::fs::create_dir_all(extract_to)
@@ -252,12 +264,12 @@ fn extract_tarball(tarball_data: &[u8], extract_to: &Path, owner: &str, repo: &s
     std::fs::write(&temp_tarball, tarball_data)
         .map_err(|e| format!("Failed to write tarball: {e}"))?;
 
-    // Extract using tar
+    // Extract using tar — use cleaned paths to avoid \\?\ prefix issues on Windows.
     let extract_status = silent_command("tar")
         .arg("-xzf")
-        .arg(&temp_tarball)
+        .arg(path_for_cmd(&temp_tarball))
         .arg("-C")
-        .arg(extract_to)
+        .arg(path_for_cmd(extract_to))
         .arg("--strip-components=1")
         .output()
         .map_err(|e| format!("tar not found: {e}"))?;
@@ -265,7 +277,10 @@ fn extract_tarball(tarball_data: &[u8], extract_to: &Path, owner: &str, repo: &s
     // Cleanup temp tarball
     let _ = std::fs::remove_file(&temp_tarball);
 
-    if !extract_status.status.success() {
+    // Exit code 1 from tar means non-fatal warnings (e.g. unsupported metadata on Windows).
+    // Only treat it as a hard failure if no skill files were actually extracted.
+    let exit_code = extract_status.status.code().unwrap_or(2);
+    if exit_code >= 2 {
         let stderr = String::from_utf8_lossy(&extract_status.stderr);
         return Err(format!("Failed to extract tarball for {}/{}: {}", owner, repo, stderr));
     }
