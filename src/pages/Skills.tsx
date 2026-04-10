@@ -21,6 +21,7 @@ function Skills() {
   const [copying, setCopying] = useState<InstalledSkill | null>(null);
   const [deleting, setDeleting] = useState<InstalledSkill | null>(null);
   const [toast, setToast] = useState<string | null>(null);
+  const [refreshKey, setRefreshKey] = useState(0);
 
   const { clients: clientStates } = useClientStore();
   // Filter out false positives: clients marked as installed but whose binary doesn't actually exist
@@ -70,6 +71,7 @@ function Skills() {
       }
     }
     showToast(`"${skill.name}" copied to ${targetClientIds.length} client${targetClientIds.length > 1 ? "s" : ""}`);
+    setRefreshKey((k) => k + 1);
   };
 
   const handleDelete = async () => {
@@ -132,6 +134,7 @@ function Skills() {
           onCopyTo={setCopying} onDelete={setDeleting}
           deleteSkills={deleteSkills}
           showToast={showToast}
+          refreshKey={refreshKey}
         />
       )}
       {tab === "discover" && (
@@ -173,7 +176,7 @@ function Skills() {
   );
 }
 
-function InstalledTab({ clients, selectedClientId, skills, isLoading, onSelectClient, onAdd, canAdd, onOpenInFinder, onView, onCopyTo, onDelete, deleteSkills, showToast }: {
+function InstalledTab({ clients, selectedClientId, skills, isLoading, onSelectClient, onAdd, canAdd, onOpenInFinder, onView, onCopyTo, onDelete, deleteSkills, showToast, refreshKey }: {
   clients: ReturnType<typeof getSkillableClients>;
   selectedClientId: string | null;
   skills: InstalledSkill[];
@@ -187,6 +190,7 @@ function InstalledTab({ clients, selectedClientId, skills, isLoading, onSelectCl
   onDelete: (s: InstalledSkill) => void;
   deleteSkills: (paths: string[], skillsPath: string) => Promise<void>;
   showToast: (msg: string) => void;
+  refreshKey: number;
 }) {
   const [selectionMode, setSelectionMode] = useState(false);
   const [selected, setSelected] = useState<Set<string>>(new Set());
@@ -224,7 +228,7 @@ function InstalledTab({ clients, selectedClientId, skills, isLoading, onSelectCl
 
       loadAllSkills();
     }
-  }, [selectedClientId, clients]);
+  }, [selectedClientId, clients, refreshKey]);
 
   const displaySkills = selectedClientId === "all" ? allSkills : skills;
   const showSkeleton = selectedClientId === "all"

@@ -1,7 +1,6 @@
 use serde::{Deserialize, Serialize};
-use std::process::Command;
 
-use super::utils::{expand_config_key, expand_tilde, navigate_json_key};
+use super::utils::{expand_config_key, expand_tilde, navigate_json_key, silent_command};
 
 #[derive(Debug, Deserialize)]
 pub struct DetectionRequest {
@@ -127,7 +126,7 @@ fn check_installed(kind: &str, value: Option<&str>) -> bool {
                 #[cfg(not(target_os = "windows"))]
                 let lookup_cmd = "which";
 
-                let found_via_lookup = Command::new(lookup_cmd)
+                let found_via_lookup = silent_command(lookup_cmd)
                     .arg(name)
                     .output()
                     .map(|o| o.status.success())

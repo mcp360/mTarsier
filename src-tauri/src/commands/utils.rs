@@ -1,4 +1,19 @@
 use std::path::PathBuf;
+use std::process::Command;
+
+/// Creates a Command that won't flash a CMD window on Windows.
+pub fn silent_command(program: &str) -> Command {
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        const CREATE_NO_WINDOW: u32 = 0x08000000;
+        let mut cmd = Command::new(program);
+        cmd.creation_flags(CREATE_NO_WINDOW);
+        return cmd;
+    }
+    #[cfg(not(windows))]
+    Command::new(program)
+}
 
 pub fn expand_tilde(path: &str) -> PathBuf {
     #[cfg(target_os = "windows")]

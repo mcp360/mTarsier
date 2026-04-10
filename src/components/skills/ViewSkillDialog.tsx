@@ -26,8 +26,12 @@ export default function ViewSkillDialog({ skill, onClose }: Props) {
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
-      <div className="w-full max-w-3xl rounded-xl border border-border bg-surface shadow-2xl">
-        <div className="flex items-center justify-between border-b border-border px-5 py-4">
+      <div
+        className="w-full max-w-3xl rounded-xl border border-border bg-surface shadow-2xl flex flex-col"
+        style={{ maxHeight: "calc(90vh)" }}
+      >
+        {/* Header — fixed */}
+        <div className="flex-shrink-0 flex items-center justify-between border-b border-border px-5 py-4">
           <div>
             <h2 className="text-sm font-semibold text-text">View Skill</h2>
             <p className="mt-0.5 text-[11px] text-text-muted">
@@ -39,7 +43,8 @@ export default function ViewSkillDialog({ skill, onClose }: Props) {
           </button>
         </div>
 
-        <div className="space-y-4 p-5">
+        {/* Content — scrollable */}
+        <div className="flex-1 overflow-y-auto p-5 space-y-4">
           <div className="rounded-lg border border-border bg-base p-3 space-y-1">
             <p className="text-xs font-semibold text-text">{skill.name}</p>
             {skill.description ? (
@@ -54,13 +59,14 @@ export default function ViewSkillDialog({ skill, onClose }: Props) {
             <p className="text-[11px] font-medium uppercase tracking-wide text-text-muted">
               SKILL.md content
             </p>
-            <pre className="max-h-[52vh] overflow-auto whitespace-pre-wrap break-words rounded-lg border border-border bg-base p-3 text-[11px] text-text leading-relaxed">
+            <pre className="whitespace-pre-wrap break-words rounded-lg border border-border bg-base p-3 text-[11px] text-text leading-relaxed">
               {skill.raw_content}
             </pre>
           </div>
         </div>
 
-        <div className="flex items-center justify-between gap-2 border-t border-border px-5 py-4">
+        {/* Footer — fixed */}
+        <div className="flex-shrink-0 flex items-center justify-between gap-2 border-t border-border px-5 py-4">
           <div className="text-[11px]">
             {copyState === "success" && (
               <span className="text-primary">Copied SKILL.md content</span>

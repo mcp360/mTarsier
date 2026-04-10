@@ -78,7 +78,7 @@ export default function SkillCard({
           <span className="text-xs font-semibold text-text truncate">{skill.name}</span>
         </div>
         {!selectionMode && (
-          <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0">
+          <div className="flex items-center gap-1 opacity-40 group-hover:opacity-100 transition-opacity flex-shrink-0">
             <button
               onClick={(e) => {
                 e.stopPropagation();
