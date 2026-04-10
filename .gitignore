@@ -28,6 +28,14 @@ dist-ssr
 # OS
 .DS_Store
 
+# Local tool/skill directories
+.agents/
+.claude/
+.continue/
+.windsurf/
+/skills/
+skills-lock.json
+
 # Tauri
 src-tauri/target/
 src-tauri/binaries/

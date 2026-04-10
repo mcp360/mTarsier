@@ -3,7 +3,7 @@ use std::collections::{HashMap, HashSet};
 use std::path::{Component, Path, PathBuf};
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use super::utils::expand_tilde;
+use super::utils::{expand_tilde, silent_command};
 
 const SKILLS_SEARCH_ENDPOINT: &str = "https://skills.sh/api/search";
 const MAX_SEARCH_QUERY_LEN: usize = 120;
@@ -180,7 +180,7 @@ fn download_github_tarball(owner: &str, repo: &str, extract_to: &Path) -> Result
     let tarball_url = format!("https://api.github.com/repos/{}/{}/tarball/main", owner, repo);
 
     // Download tarball using curl
-    let download_output = std::process::Command::new("curl")
+    let download_output = silent_command("curl")
         .arg("-sfL")
         .arg("--proto")
         .arg("=https")
@@ -196,7 +196,7 @@ fn download_github_tarball(owner: &str, repo: &str, extract_to: &Path) -> Result
     if !download_output.status.success() {
         // Try 'master' branch as fallback
         let master_url = format!("https://api.github.com/repos/{}/{}/tarball/master", owner, repo);
-        let master_output = std::process::Command::new("curl")
+        let master_output = silent_command("curl")
             .arg("-sfL")
             .arg("--proto")
             .arg("=https")
@@ -253,7 +253,7 @@ fn extract_tarball(tarball_data: &[u8], extract_to: &Path, owner: &str, repo: &s
         .map_err(|e| format!("Failed to write tarball: {e}"))?;
 
     // Extract using tar
-    let extract_status = std::process::Command::new("tar")
+    let extract_status = silent_command("tar")
         .arg("-xzf")
         .arg(&temp_tarball)
         .arg("-C")
@@ -474,7 +474,7 @@ pub fn skills_search(query: String) -> Result<Vec<SkillSearchResult>, String> {
     let query_param = format!("q={}", sanitized_query);
 
     // Use curl with a fixed endpoint and URL-encoded query args.
-    let output = std::process::Command::new("curl")
+    let output = silent_command("curl")
         .arg("-sf")
         .arg("--proto")
         .arg("=https")
