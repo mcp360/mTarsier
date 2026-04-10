@@ -15,7 +15,6 @@ export type DeepLinkAction =
 
 interface DeepLinkStore {
   pending: DeepLinkAction | null;
-  consume: () => DeepLinkAction | null;
   setPending: (action: DeepLinkAction) => void;
   clear: () => void;
 }
@@ -156,16 +155,10 @@ export function parseDeepLink(raw: string): DeepLinkAction | null {
   return null;
 }
 
-export const useDeepLinkStore = create<DeepLinkStore>((set, get) => ({
+export const useDeepLinkStore = create<DeepLinkStore>((set) => ({
   pending: null,
 
   setPending: (action) => set({ pending: action }),
-
-  consume: () => {
-    const { pending } = get();
-    if (pending) set({ pending: null });
-    return pending;
-  },
 
   clear: () => set({ pending: null }),
 }));
