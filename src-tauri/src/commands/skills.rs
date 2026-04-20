@@ -929,8 +929,7 @@ pub fn list_skills(skills_path: String) -> Result<Vec<SkillEntry>, String> {
         return Ok(vec![]);
     }
 
-    let canonical_base =
-        std::fs::canonicalize(&path).map_err(|e| format!("Failed to resolve skills path: {e}"))?;
+    let canonical_home = canonical_home_dir()?;
 
     let entries = std::fs::read_dir(&path).map_err(|e| e.to_string())?;
     let mut skills = vec![];
@@ -939,22 +938,22 @@ pub fn list_skills(skills_path: String) -> Result<Vec<SkillEntry>, String> {
             Ok(entry) => entry,
             Err(_) => continue,
         };
-        let file_type = match entry.file_type() {
-            Ok(ft) => ft,
-            Err(_) => continue,
-        };
-        if !file_type.is_dir() || file_type.is_symlink() {
-            continue;
-        }
-
         let dir_path = entry.path();
-        let canonical_dir = match std::fs::canonicalize(&dir_path) {
+
+        // Resolve symlinks — follow them to the real path
+        let resolved = match std::fs::canonicalize(&dir_path) {
             Ok(path) => path,
             Err(_) => continue,
         };
-        if canonical_dir.parent() != Some(canonical_base.as_path()) {
+        if !resolved.is_dir() {
             continue;
         }
+
+        // Security: resolved path must be inside the home directory
+        if !resolved.starts_with(&canonical_home) {
+            continue;
+        }
+        let canonical_dir = resolved;
         let skill_file = canonical_dir.join("SKILL.md");
         if !skill_file.exists() {
             continue;
@@ -962,17 +961,19 @@ pub fn list_skills(skills_path: String) -> Result<Vec<SkillEntry>, String> {
         let raw = std::fs::read_to_string(&skill_file).map_err(|e| e.to_string())?;
         let fm = parse_frontmatter(&raw);
         let name = fm.get("name").cloned().unwrap_or_else(|| {
-            canonical_dir
+            dir_path
                 .file_name()
                 .and_then(|n| n.to_str())
                 .unwrap_or("unknown")
                 .to_string()
         });
         let description = fm.get("description").cloned().unwrap_or_default();
+        // Return the entry path (symlink), not the resolved path —
+        // so delete removes the symlink from this client, not the original.
         skills.push(SkillEntry {
             name,
             description,
-            path: canonical_dir.to_string_lossy().to_string(),
+            path: dir_path.to_string_lossy().to_string(),
             raw_content: raw,
         });
     }
@@ -1014,6 +1015,19 @@ pub fn write_skill(
 
 #[tauri::command]
 pub fn delete_skill(skill_path: String) -> Result<(), String> {
+    let expanded = expand_tilde(&skill_path);
+
+    // If it's a symlink, delete the original target AND the symlink
+    if expanded.is_symlink() {
+        if let Ok(target) = std::fs::canonicalize(&expanded) {
+            if target.is_dir() {
+                std::fs::remove_dir_all(&target).ok();
+            }
+        }
+        std::fs::remove_file(&expanded).map_err(|e| e.to_string())?;
+        return Ok(());
+    }
+
     let Some(path) = validate_skill_delete_path(&skill_path)? else {
         return Ok(());
     };
@@ -1025,6 +1039,20 @@ pub fn delete_skills_bulk(skill_paths: Vec<String>) -> Result<usize, String> {
     let mut deleted_count = 0usize;
 
     for skill_path in skill_paths {
+        let expanded = expand_tilde(&skill_path);
+
+        if expanded.is_symlink() {
+            if let Ok(target) = std::fs::canonicalize(&expanded) {
+                if target.is_dir() {
+                    std::fs::remove_dir_all(&target).ok();
+                }
+            }
+            std::fs::remove_file(&expanded)
+                .map_err(|e| format!("Failed to delete {}: {}", skill_path, e))?;
+            deleted_count += 1;
+            continue;
+        }
+
         let Some(path) = validate_skill_delete_path(&skill_path)? else {
             continue;
         };
