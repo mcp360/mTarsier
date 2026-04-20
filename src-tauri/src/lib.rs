@@ -32,6 +32,7 @@ pub fn run() {
       commands::audit::clear_audit_logs,
       commands::audit::export_audit_logs,
       commands::audit::log_audit_entry,
+      commands::audit::set_audit_enabled,
       commands::utils::get_home_dir,
       commands::cli::install_cli,
       commands::cli::check_cli_installed,

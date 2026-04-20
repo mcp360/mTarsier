@@ -1,5 +1,9 @@
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
+use std::sync::atomic::{AtomicBool, Ordering};
+
+/// Global flag — when false, `append_entry` is a no-op.
+pub static AUDIT_ENABLED: AtomicBool = AtomicBool::new(true);
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AuditEntry {
@@ -46,6 +50,9 @@ pub fn append_entry(
     detail: &str,
     config_path: Option<&str>,
 ) {
+    if !AUDIT_ENABLED.load(Ordering::Relaxed) {
+        return;
+    }
     let entry = AuditEntry {
         id: uuid_v4(),
         timestamp: chrono::Local::now().to_rfc3339(),
@@ -88,6 +95,11 @@ pub fn export_audit_logs() -> Result<String, String> {
     let entries = read_entries()?;
     serde_json::to_string_pretty(&entries)
         .map_err(|e| format!("Failed to export audit logs: {}", e))
+}
+
+#[tauri::command]
+pub fn set_audit_enabled(enabled: bool) {
+    AUDIT_ENABLED.store(enabled, Ordering::Relaxed);
 }
 
 #[tauri::command]
