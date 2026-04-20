@@ -4,7 +4,7 @@ use std::process;
 
 use app_lib::commands::clients::{detect_installed_clients_sync, read_mcp_servers, DetectionRequest};
 use app_lib::commands::server::{read_store, write_store, ServerEntry};
-use app_lib::commands::skills::{delete_skill, list_skills, skills_install_blocking, skills_search};
+use app_lib::commands::skills::{delete_skill, list_skills, skills_install_blocking, skills_install_via_npx, skills_search};
 use app_lib::commands::utils::{ensure_json_path, expand_config_key, expand_tilde};
 use app_lib::marketplace::{find_server, MARKETPLACE};
 use app_lib::registry::{find_client, platform_config_path, platform_skills_path, REGISTRY};
@@ -1232,7 +1232,7 @@ fn json_to_toml_value(v: &serde_json::Value) -> toml::Value {
 
 // ─── Skills command implementations ──────────────────────────────────────────
 
-fn resolve_client_skills_path(client_id: &str) -> (&'static str, &'static str) {
+fn resolve_client_skills_path(client_id: &str) -> (&'static str, &'static str, Option<&'static str>) {
     let client_def = match find_client(client_id) {
         Some(c) => c,
         None => {
@@ -1251,11 +1251,11 @@ fn resolve_client_skills_path(client_id: &str) -> (&'static str, &'static str) {
             process::exit(1);
         }
     };
-    (client_def.name, skills_path)
+    (client_def.name, skills_path, client_def.npx_agent_id)
 }
 
 fn cmd_skills_list(client: String, json: bool) {
-    let (client_name, skills_path) = resolve_client_skills_path(&client);
+    let (client_name, skills_path, _) = resolve_client_skills_path(&client);
 
     match list_skills(skills_path.to_string()) {
         Ok(skills) => {
@@ -1299,16 +1299,56 @@ fn cmd_skills_list(client: String, json: bool) {
 }
 
 fn cmd_skills_install(source: String, client: String, name: Option<String>) {
-    let (client_name, skills_path) = resolve_client_skills_path(&client);
+    let (client_name, skills_path, npx_agent_id) = resolve_client_skills_path(&client);
 
-    println!("Installing '{}' for {}...", source, client_name);
+    // If source has no '/', treat it as a skill name and auto-search
+    let resolved_source = if !source.contains('/') {
+        match skills_search(source.clone()) {
+            Ok(results) if !results.is_empty() => {
+                let top = &results[0];
+                let s = top.id.clone();
+                // Validate the registry-returned ID before using it as a source
+                let valid = s.split('/').all(|p| {
+                    !p.is_empty() && p.chars().all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_' || c == '.')
+                }) && s.contains('/');
+                if !valid {
+                    eprintln!("Registry returned invalid skill ID: '{}'", s);
+                    process::exit(1);
+                }
+                println!("Found '{}' → {}", source, s);
+                s
+            }
+            Ok(_) => {
+                eprintln!("No skills found matching '{}'. Try: tsr skills search <query>", source);
+                process::exit(1);
+            }
+            Err(e) => {
+                eprintln!("Search failed: {}", e);
+                process::exit(1);
+            }
+        }
+    } else {
+        source.clone()
+    };
 
-    match skills_install_blocking(source.clone(), vec![skills_path.to_string()], name) {
+    println!("Installing '{}' for {}...", resolved_source, client_name);
+
+    // Try npx first for known clients, fall back to file-copy
+    if let Some(agent_id) = npx_agent_id {
+        let agent_ids = vec![agent_id.to_string()];
+        if skills_install_via_npx(&resolved_source, &agent_ids, name.as_deref()).is_ok() {
+            println!("✓ Installed '{}' via npx to {}", resolved_source, expand_tilde(skills_path).display());
+            return;
+        }
+        // npx failed, fall through to file-copy
+    }
+
+    match skills_install_blocking(resolved_source.clone(), vec![skills_path.to_string()], name) {
         Ok(installed) => {
             println!("✓ Installed '{}' to {}", installed, expand_tilde(skills_path).display());
         }
         Err(e) => {
-            eprintln!("Error installing skill '{}': {}", source, e);
+            eprintln!("Error installing skill '{}': {}", resolved_source, e);
             process::exit(1);
         }
     }
@@ -1383,7 +1423,7 @@ fn cmd_skills_search(query: String, json: bool) {
 }
 
 fn cmd_skills_remove(name: String, client: String) {
-    let (client_name, skills_path) = resolve_client_skills_path(&client);
+    let (client_name, skills_path, _) = resolve_client_skills_path(&client);
 
     let skill_path = format!("{}/{}", skills_path, name);
 

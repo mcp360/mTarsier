@@ -21,20 +21,13 @@ function Skills() {
   const [copying, setCopying] = useState<InstalledSkill | null>(null);
   const [deleting, setDeleting] = useState<InstalledSkill | null>(null);
   const [toast, setToast] = useState<string | null>(null);
+  const [refreshKey, setRefreshKey] = useState(0);
 
   const { clients: clientStates } = useClientStore();
   // Filter out false positives: clients marked as installed but whose binary doesn't actually exist
   // This happens when only config files exist (e.g. ~/.gemini/ or ~/.config/opencode/)
   const detectedMetas = clientStates
-    .filter((cs) => {
-      // Only show as installed if:
-      // 1. detection says installed AND
-      // 2. either has servers configured OR is not a CLI tool with just empty config
-      const hasServers = (cs.serverCount ?? 0) > 0;
-      const isCliWithOnlyConfig = cs.meta.detection.kind === "cli_binary" && cs.configExists && !hasServers;
-
-      return cs.installed && !isCliWithOnlyConfig;
-    })
+    .filter((cs) => cs.installed)
     .map((cs) => cs.meta);
   const clients = getSkillableClients(detectedMetas);
   const { selectedClientId, skills, isLoading, setSelectedClient, loadSkills, writeSkill, deleteSkill, deleteSkills } = useSkillStore();
@@ -70,11 +63,21 @@ function Skills() {
       }
     }
     showToast(`"${skill.name}" copied to ${targetClientIds.length} client${targetClientIds.length > 1 ? "s" : ""}`);
+    setRefreshKey((k) => k + 1);
   };
 
   const handleDelete = async () => {
-    if (!deleting || !selectedClientId || !selectedClient) return;
-    await deleteSkill(deleting.path, selectedClient.skillsPath);
+    if (!deleting) return;
+    let skillsPath: string | undefined;
+    if (selectedClientId === "all") {
+      const withClient = deleting as InstalledSkill & { clientId?: string };
+      skillsPath = clients.find((c) => c.id === withClient.clientId)?.skillsPath;
+    } else {
+      if (!selectedClient) return;
+      skillsPath = selectedClient.skillsPath;
+    }
+    if (!skillsPath) return;
+    await deleteSkill(deleting.path, skillsPath);
     setDeleting(null);
     showToast(`Deleted "${deleting.name}"`);
   };
@@ -93,14 +96,14 @@ function Skills() {
       const firstClient = clients.find((c) => c.id === clientIds[0]);
       setSelectedClient(clientIds[0]);
       if (firstClient?.skillsPath) {
-        loadSkills(firstClient.skillsPath);
+        loadSkills(firstClient.skillsPath, true);
       }
       showToast(`"${name}" installed for ${clientIds.length} client${clientIds.length > 1 ? "s" : ""}`);
       return;
     }
     showToast(`"${name}" installed globally`);
     if (selectedClientId && selectedClient?.skillsPath) {
-      loadSkills(selectedClient.skillsPath);
+      loadSkills(selectedClient.skillsPath, true);
     }
   };
 
@@ -114,7 +117,7 @@ function Skills() {
       <div className="flex gap-1 mb-5 border-b border-border">
         {(["installed", "discover"] as Tab[]).map((t) => (
           <button key={t} onClick={() => setTab(t)}
-            className={cn("text-xs px-3 py-2 border-b-2 -mb-px transition-colors capitalize",
+            className={cn("text-xs px-3 py-2 border-b-2 -mb-px transition-colors capitalize cursor-pointer",
               tab === t ? "border-primary text-primary" : "border-transparent text-text-muted hover:text-text"
             )}>{t}</button>
         ))}
@@ -132,6 +135,7 @@ function Skills() {
           onCopyTo={setCopying} onDelete={setDeleting}
           deleteSkills={deleteSkills}
           showToast={showToast}
+          refreshKey={refreshKey}
         />
       )}
       {tab === "discover" && (
@@ -144,8 +148,11 @@ function Skills() {
       {adding && selectedClient && (
         <AddSkillDialog
           clientName={selectedClient.name}
+          skillsPath={selectedClient.skillsPath}
+          npxAgentId={selectedClient.npxAgentId}
           onClose={() => setAdding(false)}
           onCreate={handleAddSkill}
+          onNpxInstall={() => selectedClient.skillsPath && loadSkills(selectedClient.skillsPath, true)}
         />
       )}
       {viewing && (
@@ -173,7 +180,7 @@ function Skills() {
   );
 }
 
-function InstalledTab({ clients, selectedClientId, skills, isLoading, onSelectClient, onAdd, canAdd, onOpenInFinder, onView, onCopyTo, onDelete, deleteSkills, showToast }: {
+function InstalledTab({ clients, selectedClientId, skills, isLoading, onSelectClient, onAdd, canAdd, onOpenInFinder, onView, onCopyTo, onDelete, deleteSkills, showToast, refreshKey }: {
   clients: ReturnType<typeof getSkillableClients>;
   selectedClientId: string | null;
   skills: InstalledSkill[];
@@ -187,6 +194,7 @@ function InstalledTab({ clients, selectedClientId, skills, isLoading, onSelectCl
   onDelete: (s: InstalledSkill) => void;
   deleteSkills: (paths: string[], skillsPath: string) => Promise<void>;
   showToast: (msg: string) => void;
+  refreshKey: number;
 }) {
   const [selectionMode, setSelectionMode] = useState(false);
   const [selected, setSelected] = useState<Set<string>>(new Set());
@@ -224,7 +232,7 @@ function InstalledTab({ clients, selectedClientId, skills, isLoading, onSelectCl
 
       loadAllSkills();
     }
-  }, [selectedClientId, clients]);
+  }, [selectedClientId, clients, refreshKey]);
 
   const displaySkills = selectedClientId === "all" ? allSkills : skills;
   const showSkeleton = selectedClientId === "all"
@@ -322,7 +330,7 @@ function InstalledTab({ clients, selectedClientId, skills, isLoading, onSelectCl
         <div className="flex flex-wrap gap-1.5">
           <button
             onClick={() => onSelectClient("all")}
-            className={cn("text-xs px-2.5 py-1 rounded-full border transition-colors",
+            className={cn("text-xs px-2.5 py-1 rounded-full border transition-colors cursor-pointer",
               selectedClientId === "all"
                 ? "bg-primary/10 text-primary border-primary/30"
                 : "text-text-muted border-border hover:border-border-hover hover:text-text"
@@ -332,7 +340,7 @@ function InstalledTab({ clients, selectedClientId, skills, isLoading, onSelectCl
           </button>
           {clients.map((c) => (
             <button key={c.id} onClick={() => onSelectClient(c.id)}
-              className={cn("text-xs px-2.5 py-1 rounded-full border transition-colors",
+              className={cn("text-xs px-2.5 py-1 rounded-full border transition-colors cursor-pointer",
                 selectedClientId === c.id
                   ? "bg-primary/10 text-primary border-primary/30"
                   : "text-text-muted border-border hover:border-border-hover hover:text-text"
@@ -344,20 +352,20 @@ function InstalledTab({ clients, selectedClientId, skills, isLoading, onSelectCl
             <>
               <button
                 onClick={exitSelectionMode}
-                className="rounded-lg border border-border px-3 py-1.5 text-xs font-medium text-text-muted transition-colors hover:text-text hover:border-border-hover"
+                className="rounded-lg border border-border px-3 py-1.5 text-xs font-medium text-text-muted transition-colors hover:text-text hover:border-border-hover cursor-pointer"
               >
                 Cancel
               </button>
               <button
                 onClick={selected.size === displaySkills.length ? deselectAll : selectAll}
-                className="rounded-lg border border-border px-3 py-1.5 text-xs font-medium text-text-muted transition-colors hover:text-text hover:border-border-hover"
+                className="rounded-lg border border-border px-3 py-1.5 text-xs font-medium text-text-muted transition-colors hover:text-text hover:border-border-hover cursor-pointer"
               >
                 {selected.size === displaySkills.length ? "Deselect All" : "Select All"}
               </button>
               <button
                 onClick={() => setConfirmBulkDelete(true)}
                 disabled={selected.size === 0}
-                className="rounded-lg border border-red-400/30 bg-red-400/10 px-3 py-1.5 text-xs font-medium text-red-400 transition-colors hover:bg-red-400/15 disabled:cursor-not-allowed disabled:opacity-50"
+                className="rounded-lg border border-red-400/30 bg-red-400/10 px-3 py-1.5 text-xs font-medium text-red-400 transition-colors hover:bg-red-400/15 disabled:cursor-not-allowed disabled:opacity-50 cursor-pointer"
               >
                 Delete ({selected.size})
               </button>
@@ -367,18 +375,20 @@ function InstalledTab({ clients, selectedClientId, skills, isLoading, onSelectCl
               {displaySkills.length > 0 && (
                 <button
                   onClick={() => setSelectionMode(true)}
-                  className="rounded-lg border border-border px-3 py-1.5 text-xs font-medium text-text-muted transition-colors hover:text-text hover:border-border-hover"
+                  className="rounded-lg border border-border px-3 py-1.5 text-xs font-medium text-text-muted transition-colors hover:text-text hover:border-border-hover cursor-pointer"
                 >
                   Select
                 </button>
               )}
-              <button
-                onClick={onAdd}
-                disabled={!canAdd || selectedClientId === "all"}
-                className="rounded-lg border border-primary/30 bg-primary/10 px-3 py-1.5 text-xs font-medium text-primary transition-colors hover:bg-primary/15 disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                Add Skill
-              </button>
+              {selectedClientId !== "all" && (
+                <button
+                  onClick={onAdd}
+                  disabled={!canAdd}
+                  className="rounded-lg border border-primary/30 bg-primary/10 px-3 py-1.5 text-xs font-medium text-primary transition-colors hover:bg-primary/15 disabled:cursor-not-allowed disabled:opacity-50 cursor-pointer"
+                >
+                  Add Skill
+                </button>
+              )}
             </>
           )}
         </div>
@@ -458,14 +468,14 @@ function InstalledTab({ clients, selectedClientId, skills, isLoading, onSelectCl
               <button
                 onClick={() => setConfirmBulkDelete(false)}
                 disabled={isDeleting}
-                className="text-xs px-4 py-2 rounded-lg border border-border text-text-muted hover:text-text transition-colors disabled:opacity-50"
+                className="text-xs px-4 py-2 rounded-lg border border-border text-text-muted hover:text-text transition-colors disabled:opacity-50 cursor-pointer"
               >
                 Cancel
               </button>
               <button
                 onClick={handleBulkDelete}
                 disabled={isDeleting}
-                className="text-xs font-medium px-4 py-2 rounded-lg bg-red-400/10 border border-red-400/30 text-red-400 hover:bg-red-400/15 transition-colors disabled:opacity-50 flex items-center gap-2"
+                className="text-xs font-medium px-4 py-2 rounded-lg bg-red-400/10 border border-red-400/30 text-red-400 hover:bg-red-400/15 transition-colors disabled:opacity-50 flex items-center gap-2 cursor-pointer"
               >
                 {isDeleting && (
                   <div className="flex gap-0.5">
@@ -635,16 +645,18 @@ function DiscoverTab({
       throw new Error("Please select at least one client or custom folder");
     }
 
-    // Get target paths for selected clients plus any custom paths
+    // Split selected clients: npx-capable vs file-copy
+    const selectedClients = clientIds.map((id) => clients.find((c) => c.id === id)).filter(Boolean);
+    const npxAgentIds = selectedClients.filter((c) => c!.npxAgentId).map((c) => c!.npxAgentId!);
+    const npxFallbackPaths = selectedClients
+      .filter((c) => c!.npxAgentId && c!.skillsPath)
+      .map((c) => c!.skillsPath!);
     const targetPaths = [
-      ...clientIds
-        .map((id) => clients.find((c) => c.id === id))
-        .filter((c) => c?.skillsPath)
-        .map((c) => c!.skillsPath),
+      ...selectedClients.filter((c) => !c!.npxAgentId && c!.skillsPath).map((c) => c!.skillsPath!),
       ...customPaths,
     ];
 
-    if (targetPaths.length === 0) {
+    if (npxAgentIds.length === 0 && targetPaths.length === 0) {
       throw new Error("No valid client paths selected for installation");
     }
 
@@ -655,6 +667,8 @@ function DiscoverTab({
       const installedName = await invoke<string>("skills_install", {
         source: installSource,
         targetPaths,
+        npxAgentIds,
+        npxFallbackPaths,
         requestedName: pendingInstall.name,
       });
       onInstalled(installedName || pendingInstall.name, clientIds);

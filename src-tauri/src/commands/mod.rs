@@ -2,6 +2,7 @@ pub mod audit;
 pub mod cli;
 pub mod clients;
 pub mod config;
+pub mod flow;
 pub mod io;
 pub mod server;
 pub mod skills;

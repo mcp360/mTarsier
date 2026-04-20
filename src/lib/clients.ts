@@ -12,7 +12,7 @@ export const CLIENT_REGISTRY: ClientMeta[] = [
     configPathLinux: "~/.config/Claude/claude_desktop_config.json",
     configKey: "mcpServers",
     configFormat: "json",
-    detection: { kind: "app_bundle", path: "/Applications/Claude.app", pathWin: "%LOCALAPPDATA%\\Microsoft\\WindowsApps\\Claude.exe" },
+    detection: { kind: "app_bundle", path: "/Applications/Claude.app", pathWin: "%LOCALAPPDATA%\\Microsoft\\WindowsApps\\Claude.exe|%LOCALAPPDATA%\\AnthropicClaude\\Update.exe" },
     supportedTransports: ["stdio", "remote-mcp"],
     supportsSkills: true,
     skillsPath: "~/Library/Application Support/Claude/skills",
@@ -33,6 +33,7 @@ export const CLIENT_REGISTRY: ClientMeta[] = [
     supportedTransports: ["stdio", "sse", "streamable-http"],
     supportsSkills: true,
     skillsPath: "~/.claude/skills",
+    npxAgentId: "claude-code",
   },
   {
     id: "claude-web",
@@ -142,6 +143,7 @@ export const CLIENT_REGISTRY: ClientMeta[] = [
     supportedTransports: ["stdio", "remote-mcp"],
     supportsSkills: true,
     skillsPath: "~/.codex/skills",
+    npxAgentId: "codex",
   },
 
   // ── Google ───────────────────────────────────────────────────────────────
@@ -160,6 +162,7 @@ export const CLIENT_REGISTRY: ClientMeta[] = [
     supportedTransports: ["stdio", "sse", "streamable-http"],
     supportsSkills: true,
     skillsPath: "~/.gemini/skills",
+    npxAgentId: "gemini-cli",
   },
   // ── OpenClaw ─────────────────────────────────────────────────────────────
   {
@@ -192,6 +195,7 @@ export const CLIENT_REGISTRY: ClientMeta[] = [
     supportedTransports: ["stdio", "sse", "streamable-http"],
     supportsSkills: true,
     skillsPath: "~/.cursor/skills",
+    npxAgentId: "cursor",
   },
   {
     id: "windsurf",
@@ -207,6 +211,7 @@ export const CLIENT_REGISTRY: ClientMeta[] = [
     supportedTransports: ["stdio", "sse", "streamable-http"],
     supportsSkills: true,
     skillsPath: "~/.codeium/windsurf/skills",
+    npxAgentId: "windsurf",
   },
   {
     id: "github-copilot",

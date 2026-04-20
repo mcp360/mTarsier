@@ -15,6 +15,8 @@ pub struct ClientDef {
     pub detection_value_linux: Option<&'static str>,
     /// Skills directory path for clients that support skills (None = not supported)
     pub skills_path: Option<&'static str>,
+    /// Agent ID for `npx skills add --agent <id>` (None = use file-copy fallback)
+    pub npx_agent_id: Option<&'static str>,
 }
 
 pub static REGISTRY: &[ClientDef] = &[
@@ -29,9 +31,10 @@ pub static REGISTRY: &[ClientDef] = &[
         config_format: "json",
         detection_kind: "app_bundle",
         detection_value: Some("/Applications/Claude.app"),
-        detection_value_win: Some("%LOCALAPPDATA%\\Microsoft\\WindowsApps\\Claude.exe"),
+        detection_value_win: Some("%LOCALAPPDATA%\\Microsoft\\WindowsApps\\Claude.exe|%LOCALAPPDATA%\\AnthropicClaude\\Update.exe"),
         detection_value_linux: None,
         skills_path: Some("~/Library/Application Support/Claude/skills"),
+        npx_agent_id: None,
     },
     ClientDef {
         id: "claude-code",
@@ -47,6 +50,7 @@ pub static REGISTRY: &[ClientDef] = &[
         detection_value_win: None, // binary name same everywhere; probe handles .cmd
         detection_value_linux: None,
         skills_path: Some("~/.claude/skills"),
+        npx_agent_id: Some("claude-code"),
     },
     ClientDef {
         id: "claude-web",
@@ -62,6 +66,7 @@ pub static REGISTRY: &[ClientDef] = &[
         detection_value_win: None,
         detection_value_linux: None,
         skills_path: None,
+        npx_agent_id: None,
     },
     ClientDef {
         id: "chatgpt-desktop",
@@ -77,6 +82,7 @@ pub static REGISTRY: &[ClientDef] = &[
         detection_value_win: Some("%LOCALAPPDATA%\\Microsoft\\WindowsApps\\ChatGPT.exe"),
         detection_value_linux: None,
         skills_path: None,
+        npx_agent_id: None,
     },
     ClientDef {
         id: "chatgpt",
@@ -92,6 +98,7 @@ pub static REGISTRY: &[ClientDef] = &[
         detection_value_win: None,
         detection_value_linux: None,
         skills_path: None,
+        npx_agent_id: None,
     },
     ClientDef {
         id: "codex-app",
@@ -107,6 +114,7 @@ pub static REGISTRY: &[ClientDef] = &[
         detection_value_win: Some("%LOCALAPPDATA%\\Programs\\Codex\\Codex.exe"),
         detection_value_linux: None,
         skills_path: None,
+        npx_agent_id: None,
     },
     ClientDef {
         id: "codex-cli",
@@ -122,6 +130,7 @@ pub static REGISTRY: &[ClientDef] = &[
         detection_value_win: None,
         detection_value_linux: None,
         skills_path: Some("~/.codex/skills"),
+        npx_agent_id: Some("codex"),
     },
     ClientDef {
         id: "opencode",
@@ -137,6 +146,7 @@ pub static REGISTRY: &[ClientDef] = &[
         detection_value_win: None,
         detection_value_linux: None,
         skills_path: Some("~/.agents/skills"),
+        npx_agent_id: Some("opencode"),
     },
     ClientDef {
         id: "gemini-cli",
@@ -152,6 +162,7 @@ pub static REGISTRY: &[ClientDef] = &[
         detection_value_win: None,
         detection_value_linux: None,
         skills_path: Some("~/.gemini/skills"),
+        npx_agent_id: Some("gemini-cli"),
     },
     ClientDef {
         id: "mcpporter",
@@ -167,6 +178,7 @@ pub static REGISTRY: &[ClientDef] = &[
         detection_value_win: None,
         detection_value_linux: None,
         skills_path: None,
+        npx_agent_id: None,
     },
     ClientDef {
         id: "antigravity",
@@ -182,6 +194,7 @@ pub static REGISTRY: &[ClientDef] = &[
         detection_value_win: None,
         detection_value_linux: Some("/usr/bin/antigravity"),
         skills_path: Some("~/.antigravity/skills"),
+        npx_agent_id: None,
     },
     ClientDef {
         id: "github-copilot",
@@ -197,6 +210,7 @@ pub static REGISTRY: &[ClientDef] = &[
         detection_value_win: None,
         detection_value_linux: None,
         skills_path: Some("~/.copilot/skills"),
+        npx_agent_id: None,
     },
     ClientDef {
         id: "github-copilot-cli",
@@ -212,6 +226,7 @@ pub static REGISTRY: &[ClientDef] = &[
         detection_value_win: None,
         detection_value_linux: None,
         skills_path: Some("~/.copilot/skills"),
+        npx_agent_id: None,
     },
     ClientDef {
         id: "cursor",
@@ -227,6 +242,7 @@ pub static REGISTRY: &[ClientDef] = &[
         detection_value_win: Some("%LOCALAPPDATA%\\Programs\\cursor\\Cursor.exe"),
         detection_value_linux: Some("/usr/bin/cursor"),
         skills_path: Some("~/.cursor/skills"),
+        npx_agent_id: Some("cursor"),
     },
     ClientDef {
         id: "windsurf",
@@ -242,6 +258,7 @@ pub static REGISTRY: &[ClientDef] = &[
         detection_value_win: Some("%LOCALAPPDATA%\\Programs\\Windsurf\\Windsurf.exe"),
         detection_value_linux: Some("/usr/bin/windsurf"),
         skills_path: Some("~/.codeium/windsurf/skills"),
+        npx_agent_id: Some("windsurf"),
     },
 ];
 

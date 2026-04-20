@@ -242,6 +242,18 @@ fn remove_symlinks_recursive(dir: &Path) {
     }
 }
 
+/// On Windows, strip the \\?\ extended-path prefix that confuses the built-in tar.
+fn path_for_cmd(path: &Path) -> String {
+    let s = path.to_string_lossy().into_owned();
+    #[cfg(target_os = "windows")]
+    {
+        if s.starts_with("\\\\?\\") {
+            return s[4..].to_string();
+        }
+    }
+    s
+}
+
 /// Extract tarball data to target directory
 fn extract_tarball(tarball_data: &[u8], extract_to: &Path, owner: &str, repo: &str) -> Result<(), String> {
     std::fs::create_dir_all(extract_to)
@@ -252,12 +264,12 @@ fn extract_tarball(tarball_data: &[u8], extract_to: &Path, owner: &str, repo: &s
     std::fs::write(&temp_tarball, tarball_data)
         .map_err(|e| format!("Failed to write tarball: {e}"))?;
 
-    // Extract using tar
+    // Extract using tar — use cleaned paths to avoid \\?\ prefix issues on Windows.
     let extract_status = silent_command("tar")
         .arg("-xzf")
-        .arg(&temp_tarball)
+        .arg(path_for_cmd(&temp_tarball))
         .arg("-C")
-        .arg(extract_to)
+        .arg(path_for_cmd(extract_to))
         .arg("--strip-components=1")
         .output()
         .map_err(|e| format!("tar not found: {e}"))?;
@@ -265,7 +277,10 @@ fn extract_tarball(tarball_data: &[u8], extract_to: &Path, owner: &str, repo: &s
     // Cleanup temp tarball
     let _ = std::fs::remove_file(&temp_tarball);
 
-    if !extract_status.status.success() {
+    // Exit code 1 from tar means non-fatal warnings (e.g. unsupported metadata on Windows).
+    // Only treat it as a hard failure if no skill files were actually extracted.
+    let exit_code = extract_status.status.code().unwrap_or(2);
+    if exit_code >= 2 {
         let stderr = String::from_utf8_lossy(&extract_status.stderr);
         return Err(format!("Failed to extract tarball for {}/{}: {}", owner, repo, stderr));
     }
@@ -390,7 +405,7 @@ fn parse_source_parts(source: &str) -> (Option<String>, Option<String>) {
 
 fn normalize_skill_name(name: &str) -> String {
     name.chars()
-        .filter(|c| c.is_alphanumeric())
+        .filter(|c| c.is_alphanumeric() || *c == '-' || *c == '_')
         .flat_map(|c| c.to_lowercase())
         .collect()
 }
@@ -657,32 +672,35 @@ pub fn skills_install_blocking(
         prepared_skills.push((skill_name, skill_dir.clone()));
     }
 
-    for (target_path, target_base) in &validated_targets {
-        if !target_base.exists() {
-            std::fs::create_dir_all(target_base)
-                .map_err(|e| format!("Failed to create {}: {}", target_path, e))?;
-        }
+    // Copy skills to all target directories in parallel.
+    let prepared_skills = std::sync::Arc::new(prepared_skills);
+    let handles: Vec<_> = validated_targets
+        .into_iter()
+        .map(|(target_path, target_base)| {
+            let prepared_skills = std::sync::Arc::clone(&prepared_skills);
+            std::thread::spawn(move || -> Result<(), String> {
+                if !target_base.exists() {
+                    std::fs::create_dir_all(&target_base)
+                        .map_err(|e| format!("Failed to create {}: {}", target_path, e))?;
+                }
+                for (skill_name, skill_dir) in prepared_skills.as_ref() {
+                    let target_skill_dir = target_base.join(skill_name);
+                    if target_skill_dir.exists() {
+                        std::fs::remove_dir_all(&target_skill_dir).map_err(|e| {
+                            format!("Failed to remove existing skill '{}' for {}: {}", skill_name, target_path, e)
+                        })?;
+                    }
+                    copy_dir_recursive(skill_dir, &target_skill_dir).map_err(|e| {
+                        format!("Failed to copy skill '{}' to {}: {}", skill_name, target_path, e)
+                    })?;
+                }
+                Ok(())
+            })
+        })
+        .collect();
 
-        for (skill_name, skill_dir) in &prepared_skills {
-            let target_skill_dir = target_base.join(skill_name);
-
-            // Remove existing if present.
-            if target_skill_dir.exists() {
-                std::fs::remove_dir_all(&target_skill_dir).map_err(|e| {
-                    format!(
-                        "Failed to remove existing skill '{}' for {}: {}",
-                        skill_name, target_path, e
-                    )
-                })?;
-            }
-
-            copy_dir_recursive(skill_dir, &target_skill_dir).map_err(|e| {
-                format!(
-                    "Failed to copy skill '{}' to {}: {}",
-                    skill_name, target_path, e
-                )
-            })?;
-        }
+    for handle in handles {
+        handle.join().map_err(|_| "Install thread panicked".to_string())??;
     }
 
     // Return summary of what was installed
@@ -696,13 +714,93 @@ pub fn skills_install_blocking(
 }
 
 #[tauri::command]
+/// Try installing via `npx skills add` for a list of agent IDs.
+/// Returns Ok(installed_count) or Err if npx is unavailable / fails.
+pub fn skills_install_via_npx(
+    source: &str,
+    agent_ids: &[String],
+    requested_name: Option<&str>,
+) -> Result<usize, String> {
+    if agent_ids.is_empty() {
+        return Ok(0);
+    }
+
+    // Validate source format: owner/repo or owner/repo/skill
+    let valid_source = source.split('/').all(|part| {
+        !part.is_empty() && part.chars().all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_' || c == '.')
+    }) && source.matches('/').count() >= 1 && source.matches('/').count() <= 2;
+    if !valid_source {
+        return Err(format!("Invalid skill source format: {}", source));
+    }
+
+    // Check npx is available
+    let npx_check = std::process::Command::new("npx")
+        .arg("--version")
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
+        .status();
+    if npx_check.is_err() || !npx_check.unwrap().success() {
+        return Err("npx not found — Node.js is required to install for this client".to_string());
+    }
+
+    let mut cmd = std::process::Command::new("npx");
+    cmd.arg("skills").arg("add").arg(source);
+
+    for id in agent_ids {
+        // Validate agent ID: alphanumeric, hyphens only
+        if id.chars().all(|c| c.is_ascii_alphanumeric() || c == '-') {
+            cmd.arg("--agent").arg(id);
+        }
+    }
+
+    if let Some(name) = requested_name {
+        let normalized = normalize_skill_name(name);
+        if !normalized.is_empty() {
+            cmd.arg("--skill").arg(normalized);
+        }
+    }
+
+    cmd.arg("--yes");
+
+    let output = cmd.output().map_err(|e| format!("Failed to run npx skills: {e}"))?;
+
+    if output.status.success() {
+        Ok(agent_ids.len())
+    } else {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        Err(format!("npx skills add failed: {}", stderr.trim()))
+    }
+}
+
+#[tauri::command]
 pub async fn skills_install(
     source: String,
     target_paths: Vec<String>,
+    npx_agent_ids: Vec<String>,
+    npx_fallback_paths: Vec<String>,
     requested_name: Option<String>,
 ) -> Result<String, String> {
     tauri::async_runtime::spawn_blocking(move || {
-        skills_install_blocking(source, target_paths, requested_name)
+        // Collect all paths that need file-copy (non-npx clients + custom paths).
+        let mut file_copy_paths = target_paths;
+
+        // Try npx for known clients; on failure, fall back to file-copy for those clients.
+        if !npx_agent_ids.is_empty() {
+            if let Err(_) = skills_install_via_npx(&source, &npx_agent_ids, requested_name.as_deref()) {
+                // npx failed — add their skillsPaths to file-copy queue
+                file_copy_paths.extend(npx_fallback_paths);
+            }
+        }
+
+        if file_copy_paths.is_empty() && npx_agent_ids.is_empty() {
+            return Err("No install targets specified".to_string());
+        }
+
+        if !file_copy_paths.is_empty() {
+            skills_install_blocking(source, file_copy_paths, requested_name)
+        } else {
+            Ok(requested_name.unwrap_or_else(|| "skill".to_string()))
+        }
     })
         .await
         .map_err(|e| format!("Installation task failed: {e}"))?
@@ -831,8 +929,7 @@ pub fn list_skills(skills_path: String) -> Result<Vec<SkillEntry>, String> {
         return Ok(vec![]);
     }
 
-    let canonical_base =
-        std::fs::canonicalize(&path).map_err(|e| format!("Failed to resolve skills path: {e}"))?;
+    let canonical_home = canonical_home_dir()?;
 
     let entries = std::fs::read_dir(&path).map_err(|e| e.to_string())?;
     let mut skills = vec![];
@@ -841,22 +938,22 @@ pub fn list_skills(skills_path: String) -> Result<Vec<SkillEntry>, String> {
             Ok(entry) => entry,
             Err(_) => continue,
         };
-        let file_type = match entry.file_type() {
-            Ok(ft) => ft,
-            Err(_) => continue,
-        };
-        if !file_type.is_dir() || file_type.is_symlink() {
-            continue;
-        }
-
         let dir_path = entry.path();
-        let canonical_dir = match std::fs::canonicalize(&dir_path) {
+
+        // Resolve symlinks — follow them to the real path
+        let resolved = match std::fs::canonicalize(&dir_path) {
             Ok(path) => path,
             Err(_) => continue,
         };
-        if canonical_dir.parent() != Some(canonical_base.as_path()) {
+        if !resolved.is_dir() {
             continue;
         }
+
+        // Security: resolved path must be inside the home directory
+        if !resolved.starts_with(&canonical_home) {
+            continue;
+        }
+        let canonical_dir = resolved;
         let skill_file = canonical_dir.join("SKILL.md");
         if !skill_file.exists() {
             continue;
@@ -864,17 +961,19 @@ pub fn list_skills(skills_path: String) -> Result<Vec<SkillEntry>, String> {
         let raw = std::fs::read_to_string(&skill_file).map_err(|e| e.to_string())?;
         let fm = parse_frontmatter(&raw);
         let name = fm.get("name").cloned().unwrap_or_else(|| {
-            canonical_dir
+            dir_path
                 .file_name()
                 .and_then(|n| n.to_str())
                 .unwrap_or("unknown")
                 .to_string()
         });
         let description = fm.get("description").cloned().unwrap_or_default();
+        // Return the entry path (symlink), not the resolved path —
+        // so delete removes the symlink from this client, not the original.
         skills.push(SkillEntry {
             name,
             description,
-            path: canonical_dir.to_string_lossy().to_string(),
+            path: dir_path.to_string_lossy().to_string(),
             raw_content: raw,
         });
     }
@@ -916,6 +1015,19 @@ pub fn write_skill(
 
 #[tauri::command]
 pub fn delete_skill(skill_path: String) -> Result<(), String> {
+    let expanded = expand_tilde(&skill_path);
+
+    // If it's a symlink, delete the original target AND the symlink
+    if expanded.is_symlink() {
+        if let Ok(target) = std::fs::canonicalize(&expanded) {
+            if target.is_dir() {
+                std::fs::remove_dir_all(&target).ok();
+            }
+        }
+        std::fs::remove_file(&expanded).map_err(|e| e.to_string())?;
+        return Ok(());
+    }
+
     let Some(path) = validate_skill_delete_path(&skill_path)? else {
         return Ok(());
     };
@@ -927,6 +1039,20 @@ pub fn delete_skills_bulk(skill_paths: Vec<String>) -> Result<usize, String> {
     let mut deleted_count = 0usize;
 
     for skill_path in skill_paths {
+        let expanded = expand_tilde(&skill_path);
+
+        if expanded.is_symlink() {
+            if let Ok(target) = std::fs::canonicalize(&expanded) {
+                if target.is_dir() {
+                    std::fs::remove_dir_all(&target).ok();
+                }
+            }
+            std::fs::remove_file(&expanded)
+                .map_err(|e| format!("Failed to delete {}: {}", skill_path, e))?;
+            deleted_count += 1;
+            continue;
+        }
+
         let Some(path) = validate_skill_delete_path(&skill_path)? else {
             continue;
         };
@@ -954,22 +1080,25 @@ pub struct FeaturedSkill {
     pub name: String,
     pub source: String,
     pub installs: u64,
+    pub description: String,
 }
 
 #[tauri::command]
 pub fn get_featured_skills() -> Vec<FeaturedSkill> {
     vec![
-        FeaturedSkill { id: "vercel-labs/skills/find-skills".into(),                             name: "find-skills".into(),                      source: "vercel-labs/skills".into(),                 installs: 787_464 },
-        FeaturedSkill { id: "vercel-labs/agent-skills/vercel-react-best-practices".into(),    name: "vercel-react-best-practices".into(),      source: "vercel-labs/agent-skills".into(),           installs: 263_730 },
-        FeaturedSkill { id: "anthropics/skills/frontend-design".into(),                       name: "frontend-design".into(),                  source: "anthropics/skills".into(),                  installs: 222_180 },
-        FeaturedSkill { id: "vercel-labs/agent-skills/web-design-guidelines".into(),          name: "web-design-guidelines".into(),            source: "vercel-labs/agent-skills".into(),           installs: 212_900 },
-        FeaturedSkill { id: "remotion-dev/skills/remotion-best-practices".into(),             name: "remotion-best-practices".into(),          source: "remotion-dev/skills".into(),                installs: 189_800 },
-        FeaturedSkill { id: "microsoft/github-copilot-for-azure/azure-ai".into(),             name: "azure-ai".into(),                         source: "microsoft/github-copilot-for-azure".into(), installs: 146_900 },
-        FeaturedSkill { id: "vercel-labs/agent-browser/agent-browser".into(),                 name: "agent-browser".into(),                    source: "vercel-labs/agent-browser".into(),          installs: 142_800 },
-        FeaturedSkill { id: "anthropics/skills/skill-creator".into(),                         name: "skill-creator".into(),                    source: "anthropics/skills".into(),                  installs: 117_800 },
-        FeaturedSkill { id: "coreyhaines31/marketingskills/seo-audit".into(),                 name: "seo-audit".into(),                        source: "coreyhaines31/marketingskills".into(),      installs: 0       },
-        FeaturedSkill { id: "inferen-sh/skills/ai-image-generation".into(),                    name: "ai-image-generation".into(),              source: "inferen-sh/skills".into(),                  installs: 114_800 },
-        FeaturedSkill { id: "supabase/agent-skills/supabase-postgres-best-practices".into(),  name: "supabase-postgres-best-practices".into(), source: "supabase/agent-skills".into(),              installs: 0       },
-        FeaturedSkill { id: "shadcn/ui/shadcn".into(),                                        name: "shadcn".into(),                           source: "shadcn/ui".into(),                          installs: 0       },
+        FeaturedSkill { id: "obra/superpowers/brainstorming".into(),                    name: "brainstorming".into(),                    source: "obra/superpowers".into(), installs: 0, description: "Structured brainstorming to explore ideas and approaches before committing to a plan.".into() },
+        FeaturedSkill { id: "obra/superpowers/dispatching-parallel-agents".into(),      name: "dispatching-parallel-agents".into(),      source: "obra/superpowers".into(), installs: 0, description: "Run multiple agents in parallel to complete complex tasks faster.".into() },
+        FeaturedSkill { id: "obra/superpowers/executing-plans".into(),                  name: "executing-plans".into(),                  source: "obra/superpowers".into(), installs: 0, description: "Execute a written plan step by step with discipline and verification.".into() },
+        FeaturedSkill { id: "obra/superpowers/finishing-a-development-branch".into(),   name: "finishing-a-development-branch".into(),   source: "obra/superpowers".into(), installs: 0, description: "Wrap up a dev branch: clean up, write tests, update docs, open PR.".into() },
+        FeaturedSkill { id: "obra/superpowers/receiving-code-review".into(),            name: "receiving-code-review".into(),            source: "obra/superpowers".into(), installs: 0, description: "Process and respond to code review feedback constructively.".into() },
+        FeaturedSkill { id: "obra/superpowers/requesting-code-review".into(),           name: "requesting-code-review".into(),           source: "obra/superpowers".into(), installs: 0, description: "Prepare code for review and write a clear, useful PR description.".into() },
+        FeaturedSkill { id: "obra/superpowers/subagent-driven-development".into(),      name: "subagent-driven-development".into(),      source: "obra/superpowers".into(), installs: 0, description: "Delegate subtasks to specialised subagents and synthesise results.".into() },
+        FeaturedSkill { id: "obra/superpowers/systematic-debugging".into(),             name: "systematic-debugging".into(),             source: "obra/superpowers".into(), installs: 0, description: "Work through bugs methodically: reproduce, isolate, fix, verify.".into() },
+        FeaturedSkill { id: "obra/superpowers/test-driven-development".into(),          name: "test-driven-development".into(),          source: "obra/superpowers".into(), installs: 0, description: "Write failing tests first, then implement until they pass.".into() },
+        FeaturedSkill { id: "obra/superpowers/using-git-worktrees".into(),              name: "using-git-worktrees".into(),              source: "obra/superpowers".into(), installs: 0, description: "Use git worktrees to work on multiple branches simultaneously.".into() },
+        FeaturedSkill { id: "obra/superpowers/using-superpowers".into(),                name: "using-superpowers".into(),                source: "obra/superpowers".into(), installs: 0, description: "Meta-skill: how to discover and apply skills from this collection.".into() },
+        FeaturedSkill { id: "obra/superpowers/verification-before-completion".into(),   name: "verification-before-completion".into(),   source: "obra/superpowers".into(), installs: 0, description: "Run a verification checklist before marking any task as done.".into() },
+        FeaturedSkill { id: "obra/superpowers/writing-plans".into(),                    name: "writing-plans".into(),                    source: "obra/superpowers".into(), installs: 0, description: "Create clear, actionable plans that can be executed without ambiguity.".into() },
+        FeaturedSkill { id: "obra/superpowers/writing-skills".into(),                   name: "writing-skills".into(),                   source: "obra/superpowers".into(), installs: 0, description: "Author new skills that teach AI agents how to handle recurring tasks.".into() },
     ]
 }

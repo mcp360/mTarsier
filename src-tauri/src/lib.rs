@@ -4,6 +4,7 @@ pub mod registry;
 pub mod tray;
 
 use std::sync::Mutex;
+#[allow(unused_imports)]
 use tauri::Manager;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -49,6 +50,8 @@ pub fn run() {
       commands::skills::skills_search,
       commands::skills::skills_install,
       commands::skills::get_featured_skills,
+      commands::flow::export_flow,
+      commands::flow::import_flow,
     ])
     .plugin(tauri_plugin_updater::Builder::new().build())
     .plugin(tauri_plugin_dialog::init())

@@ -15,6 +15,8 @@ import VideoModal from "../components/marketplace/VideoModal";
 import RegistrySkillCard from "../components/skills/RegistrySkillCard";
 import InstallSkillDialog from "../components/skills/InstallSkillDialog";
 import SkillCard from "../components/skills/SkillCard";
+import ViewSkillDialog from "../components/skills/ViewSkillDialog";
+import CopySkillDialog from "../components/skills/CopySkillDialog";
 import type { SkillSearchResult } from "../components/skills/RegistrySkillCard";
 import type { InstalledSkill } from "../store/skillStore";
 
@@ -417,6 +419,15 @@ function SkillsDiscoverSection({ showToast }: { showToast: (msg: string) => void
   // For installed skills
   const [allSkills, setAllSkills] = useState<Array<InstalledSkill & { clientName: string; clientId: string }>>([]);
   const [loadingSkills, setLoadingSkills] = useState(false);
+  const [viewingSkill, setViewingSkill] = useState<InstalledSkill | null>(null);
+  const [copyingSkill, setCopyingSkill] = useState<InstalledSkill | null>(null);
+  const [deletingSkill, setDeletingSkill] = useState<InstalledSkill | null>(null);
+  const [topPicks, setTopPicks] = useState<SkillSearchResult[]>([]);
+
+  // Load top picks on mount
+  useEffect(() => {
+    invoke<SkillSearchResult[]>("get_featured_skills").then(setTopPicks).catch(() => {});
+  }, []);
 
   // Load all skills when switching to installed view
   useEffect(() => {
@@ -567,12 +578,17 @@ function SkillsDiscoverSection({ showToast }: { showToast: (msg: string) => void
       throw new Error("Please select at least one client");
     }
 
-    const targetPaths = clientIds
-      .map((id) => clients.find((c) => c.id === id))
-      .filter((c) => c?.skillsPath)
-      .map((c) => c!.skillsPath);
+    // Split selected clients: npx-capable vs file-copy
+    const selectedClients = clientIds.map((id) => clients.find((c) => c.id === id)).filter(Boolean);
+    const npxAgentIds = selectedClients.filter((c) => c!.npxAgentId).map((c) => c!.npxAgentId!);
+    const npxFallbackPaths = selectedClients
+      .filter((c) => c!.npxAgentId && c!.skillsPath)
+      .map((c) => c!.skillsPath!);
+    const targetPaths = selectedClients
+      .filter((c) => !c!.npxAgentId && c!.skillsPath)
+      .map((c) => c!.skillsPath!);
 
-    if (targetPaths.length === 0) {
+    if (npxAgentIds.length === 0 && targetPaths.length === 0) {
       throw new Error("No valid client paths selected for installation");
     }
 
@@ -582,6 +598,8 @@ function SkillsDiscoverSection({ showToast }: { showToast: (msg: string) => void
       const installedName = await invoke<string>("skills_install", {
         source: installSource,
         targetPaths,
+        npxAgentIds,
+        npxFallbackPaths,
         requestedName: pendingInstall.name,
       });
       showToast(`"${installedName || pendingInstall.name}" installed for ${clientIds.length} client${clientIds.length > 1 ? "s" : ""}`);
@@ -748,40 +766,30 @@ function SkillsDiscoverSection({ showToast }: { showToast: (msg: string) => void
           ))}
         </div>
       ) : !hasActiveQuery ? (
-        <div className="flex flex-col items-center gap-4 py-12 text-center">
-          <svg className="w-10 h-10 text-text-muted/30" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-            <circle cx="11" cy="11" r="8" />
-            <path d="m21 21-4.35-4.35" strokeLinecap="round" strokeLinejoin="round" />
-          </svg>
-          <div className="space-y-1">
-            <p className="text-sm text-text-muted">Search the skills.sh registry</p>
-            <p className="text-[11px] text-text-muted/50">Type at least 2 characters to search</p>
+        <div className="space-y-3">
+          <div className="flex items-center justify-between">
+            <p className="text-[11px] font-medium uppercase tracking-wide text-text-muted">Top Picks</p>
+            <div className="flex flex-wrap gap-1.5">
+              {["react", "typescript", "python", "git"].map((tag) => (
+                <button
+                  key={tag}
+                  onClick={() => setQuery(tag)}
+                  className="text-[10px] px-2.5 py-1 rounded-full border border-border text-text-muted hover:border-primary/30 hover:text-primary transition-colors capitalize"
+                >
+                  {tag}
+                </button>
+              ))}
+            </div>
           </div>
-          <div className="flex flex-wrap justify-center gap-2 mt-2">
-            <button
-              onClick={() => setQuery("react")}
-              className="text-[10px] px-3 py-1.5 rounded-full border border-border text-text-muted hover:border-primary/30 hover:text-primary transition-colors"
-            >
-              React
-            </button>
-            <button
-              onClick={() => setQuery("typescript")}
-              className="text-[10px] px-3 py-1.5 rounded-full border border-border text-text-muted hover:border-primary/30 hover:text-primary transition-colors"
-            >
-              TypeScript
-            </button>
-            <button
-              onClick={() => setQuery("python")}
-              className="text-[10px] px-3 py-1.5 rounded-full border border-border text-text-muted hover:border-primary/30 hover:text-primary transition-colors"
-            >
-              Python
-            </button>
-            <button
-              onClick={() => setQuery("git")}
-              className="text-[10px] px-3 py-1.5 rounded-full border border-border text-text-muted hover:border-primary/30 hover:text-primary transition-colors"
-            >
-              Git
-            </button>
+          <div className="grid grid-cols-3 gap-3">
+            {topPicks.map((skill) => (
+              <RegistrySkillCard
+                key={skill.id}
+                skill={skill}
+                installing={installingSource === skill.id}
+                onInstall={setPendingInstall}
+              />
+            ))}
           </div>
         </div>
       ) : results.length === 0 ? (
@@ -836,9 +844,9 @@ function SkillsDiscoverSection({ showToast }: { showToast: (msg: string) => void
                         showToast(String(e));
                       }
                     }}
-                    onView={() => {}}
-                    onCopyTo={() => {}}
-                    onDelete={() => {}}
+                    onView={() => setViewingSkill(skill)}
+                    onCopyTo={() => setCopyingSkill(skill)}
+                    onDelete={() => setDeletingSkill(skill)}
                   />
                   {selectedClientId === "all" && (
                     <div className="absolute bottom-2 right-2">
@@ -860,6 +868,49 @@ function SkillsDiscoverSection({ showToast }: { showToast: (msg: string) => void
           onClose={() => setPendingInstall(null)}
           onInstall={handleInstallConfirm}
         />
+      )}
+
+      {viewingSkill && (
+        <ViewSkillDialog skill={viewingSkill} onClose={() => setViewingSkill(null)} />
+      )}
+
+      {copyingSkill && (
+        <CopySkillDialog
+          skill={copyingSkill}
+          sourceClientId={((copyingSkill as InstalledSkill & { clientId?: string }).clientId) ?? ""}
+          onClose={() => setCopyingSkill(null)}
+          onCopy={async (targetClientIds, _skill) => {
+            for (const id of targetClientIds) {
+              const target = clients.find((c) => c.id === id);
+              if (target?.skillsPath) {
+                await invoke("write_skill", { skillsPath: target.skillsPath, skillName: copyingSkill.name, content: copyingSkill.raw_content });
+              }
+            }
+            setCopyingSkill(null);
+            showToast(`"${copyingSkill.name}" copied to ${targetClientIds.length} client${targetClientIds.length > 1 ? "s" : ""}`);
+          }}
+        />
+      )}
+
+      {deletingSkill && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60">
+          <div className="w-full max-w-xs rounded-xl border border-border bg-surface p-5 shadow-2xl space-y-4">
+            <p className="text-sm font-semibold text-text">Delete skill?</p>
+            <p className="text-xs text-text-muted">This will permanently delete <span className="text-text font-medium">"{deletingSkill.name}"</span>.</p>
+            <div className="flex justify-end gap-2">
+              <button onClick={() => setDeletingSkill(null)} className="text-xs px-4 py-2 rounded-lg border border-border text-text-muted hover:text-text transition-colors">Cancel</button>
+              <button
+                onClick={async () => {
+                  await invoke("delete_skill", { skillPath: deletingSkill.path });
+                  setDeletingSkill(null);
+                  setAllSkills((prev) => prev.filter((sk) => sk.path !== deletingSkill.path));
+                  showToast(`Deleted "${deletingSkill.name}"`);
+                }}
+                className="text-xs font-medium px-4 py-2 rounded-lg bg-red-500/10 border border-red-500/30 text-red-400 hover:bg-red-500/15 transition-colors"
+              >Delete</button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

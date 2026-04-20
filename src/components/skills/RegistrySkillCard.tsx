@@ -3,6 +3,7 @@ export interface SkillSearchResult {
   name: string;
   installs?: number;
   source?: string;
+  description?: string;
 }
 
 interface Props {
@@ -34,6 +35,10 @@ export default function RegistrySkillCard({ skill, installing, onInstall }: Prop
           </span>
         )}
       </div>
+
+      {skill.description && (
+        <p className="text-[11px] text-text-muted leading-relaxed">{skill.description}</p>
+      )}
 
       <p className="text-[10px] font-mono text-text-muted/40 truncate">{skill.id}</p>
 
