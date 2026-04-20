@@ -145,7 +145,7 @@ export default function ViewSkillDialog({ skill, onClose }: Props) {
             <h2 className="text-sm font-semibold text-text">{skill.name}</h2>
             <p className="mt-0.5 text-[11px] text-text-muted break-all">{skill.path}</p>
           </div>
-          <button onClick={onClose} className="text-text-muted transition-colors hover:text-text">
+          <button onClick={onClose} className="text-text-muted transition-colors hover:text-text cursor-pointer">
             <X size={16} />
           </button>
         </div>
@@ -154,13 +154,13 @@ export default function ViewSkillDialog({ skill, onClose }: Props) {
         <div className="flex-shrink-0 flex items-center gap-1 border-b border-border px-5 py-2">
           <button
             onClick={() => setMode("preview")}
-            className={cn("px-2.5 py-1 rounded text-[11px] transition-colors", mode === "preview" ? "bg-primary/15 text-primary" : "text-text-muted hover:text-text")}
+            className={cn("px-2.5 py-1 rounded text-[11px] transition-colors cursor-pointer", mode === "preview" ? "bg-primary/15 text-primary" : "text-text-muted hover:text-text")}
           >
             Preview
           </button>
           <button
             onClick={() => setMode("raw")}
-            className={cn("px-2.5 py-1 rounded text-[11px] transition-colors", mode === "raw" ? "bg-primary/15 text-primary" : "text-text-muted hover:text-text")}
+            className={cn("px-2.5 py-1 rounded text-[11px] transition-colors cursor-pointer", mode === "raw" ? "bg-primary/15 text-primary" : "text-text-muted hover:text-text")}
           >
             Raw
           </button>
@@ -189,14 +189,14 @@ export default function ViewSkillDialog({ skill, onClose }: Props) {
             <button
               onClick={handleCopy}
               disabled={copying}
-              className="inline-flex items-center gap-1.5 rounded-lg border border-border px-3 py-1.5 text-xs text-text-muted transition-colors hover:text-text disabled:cursor-not-allowed disabled:opacity-50"
+              className="inline-flex items-center gap-1.5 rounded-lg border border-border px-3 py-1.5 text-xs text-text-muted transition-colors hover:text-text disabled:cursor-not-allowed disabled:opacity-50 cursor-pointer"
             >
               <Copy size={12} />
               {copying ? "Copying…" : "Copy"}
             </button>
             <button
               onClick={onClose}
-              className="rounded-lg border border-border px-3 py-1.5 text-xs text-text-muted transition-colors hover:text-text"
+              className="rounded-lg border border-border px-3 py-1.5 text-xs text-text-muted transition-colors hover:text-text cursor-pointer"
             >
               Close
             </button>

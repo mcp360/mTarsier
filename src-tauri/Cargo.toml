@@ -1,6 +1,6 @@
 [package]
 name = "mtarsier"
-version = "1.1.0"
+version = "1.2.0"
 description = "mTarsier - Desktop app for managing MCP servers"
 authors = ["mTarsier"]
 license = ""
@@ -38,6 +38,7 @@ chrono = "0.4"
 toml = "0.8"
 tauri-plugin-dialog = "2"
 tauri-plugin-updater = "2"
+tauri-plugin-deep-link = "2"
 clap = { version = "4", features = ["derive"] }
 fix-path-env = { git = "https://github.com/tauri-apps/fix-path-env-rs" }
 flate2 = "1"

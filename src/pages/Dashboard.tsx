@@ -4,6 +4,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { useClientStore } from "../store/clientStore";
 import { useAuditStore } from "../store/auditStore";
 import { getSkillableClients } from "../store/skillStore";
+import { useSettingsStore } from "../store/settingsStore";
 import type { ClientType } from "../types/client";
 import type { InstalledSkill } from "../store/skillStore";
 
@@ -52,6 +53,7 @@ function Dashboard() {
   const navigate = useNavigate();
   const { clients, isDetecting } = useClientStore();
   const { entries, loadLogs } = useAuditStore();
+  const { auditLogsEnabled: auditEnabled } = useSettingsStore();
   const [totalSkills, setTotalSkills] = useState<number | null>(null);
 
   useEffect(() => {
@@ -182,15 +184,30 @@ function Dashboard() {
         <div>
           <div className="mb-3 flex items-center justify-between">
             <h2 className="text-sm font-semibold text-text-muted">Recent Activity</h2>
-            <button
-              onClick={() => navigate("/audit")}
-              className="text-xs text-primary hover:underline"
-            >
-              View all &rarr;
-            </button>
+            {auditEnabled && (
+              <button
+                onClick={() => navigate("/audit")}
+                className="text-xs text-primary hover:underline"
+              >
+                View all &rarr;
+              </button>
+            )}
           </div>
 
-          {recentEntries.length === 0 ? (
+          {!auditEnabled ? (
+            <div className="flex flex-col items-center justify-center rounded-lg border border-border-hover bg-surface py-12 text-text-muted">
+              <svg className="mb-2 h-8 w-8 opacity-30" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+                <path d="M18.36 6.64a9 9 0 11-12.73 0M12 2v10" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+              <p className="text-xs">Activity logging is disabled</p>
+              <button
+                onClick={() => navigate("/settings")}
+                className="mt-2 text-[11px] text-primary hover:underline"
+              >
+                Enable in Settings
+              </button>
+            </div>
+          ) : recentEntries.length === 0 ? (
             <div className="flex flex-col items-center justify-center rounded-lg border border-border-hover bg-surface py-12 text-text-muted">
               <svg className="mb-2 h-8 w-8 opacity-30" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
                 <path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />

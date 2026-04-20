@@ -1,4 +1,5 @@
 import { create } from "zustand";
+import { invoke } from "@tauri-apps/api/core";
 
 export type StatusBarStyle = "A" | "B" | "C" | "none";
 
@@ -31,8 +32,12 @@ interface SettingsStore extends StoredSettings {
   setAutoUpdate: (enabled: boolean) => void;
 }
 
+const initial = load();
+// Sync audit setting to backend on startup
+invoke("set_audit_enabled", { enabled: initial.auditLogsEnabled }).catch(() => {});
+
 export const useSettingsStore = create<SettingsStore>((set, get) => ({
-  ...load(),
+  ...initial,
 
   setStatusBarStyle: (statusBarStyle) => {
     const state = { ...get(), statusBarStyle };
@@ -44,6 +49,7 @@ export const useSettingsStore = create<SettingsStore>((set, get) => ({
     const state = { ...get(), auditLogsEnabled };
     localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
     set({ auditLogsEnabled });
+    invoke("set_audit_enabled", { enabled: auditLogsEnabled }).catch(() => {});
   },
 
   setAutoUpdate: (autoUpdate) => {

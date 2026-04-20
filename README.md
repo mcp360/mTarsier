@@ -116,9 +116,23 @@ Join our community to get help, share ideas, and stay updated:
 
 ---
 
+## Development
+
+```bash
+git clone https://github.com/mcp360/mTarsier.git
+cd mTarsier
+pnpm install
+cd src-tauri && bash scripts/prepare-sidecar.sh && cd ..
+pnpm tauri dev
+```
+
+Requires Rust 1.77+, Node.js 20+, and pnpm 10.28+. See [CONTRIBUTING.md](CONTRIBUTING.md) for platform-specific dependencies, troubleshooting, and project structure.
+
+---
+
 ## Contributing
 
-Contributions are welcome. Please open an issue before submitting a large pull request. See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
+Contributions are welcome. Please open an issue before submitting a large pull request. See [CONTRIBUTING.md](CONTRIBUTING.md) for full setup guide and code conventions.
 
 **Maintainers:** [@0fficialRohit](https://x.com/0fficialRohit) · [@rege_dev](https://x.com/rege_dev)
 

@@ -5,6 +5,7 @@ import { cn } from "../../lib/utils";
 import { useClientStore } from "../../store/clientStore";
 import { getSkillableClients } from "../../store/skillStore";
 import type { SkillSearchResult } from "./RegistrySkillCard";
+import { ClientLogo } from "./ClientLogo";
 
 interface Props {
   skill: SkillSearchResult;
@@ -93,7 +94,7 @@ export default function InstallSkillDialog({
           <button
             onClick={onClose}
             disabled={installing}
-            className="text-text-muted hover:text-text transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            className="text-text-muted hover:text-text transition-colors disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
             title={installing ? "Installation in progress" : "Close"}
           >
             <X size={16} />
@@ -168,7 +169,7 @@ export default function InstallSkillDialog({
                       : new Set(clients.map((c) => c.id))
                   )
                 }
-                className="text-[10px] text-primary hover:underline"
+                className="text-[10px] text-primary hover:underline cursor-pointer"
               >
                 {selected.size === clients.length ? "Deselect all" : "Select all"}
               </button>
@@ -179,12 +180,13 @@ export default function InstallSkillDialog({
                   key={c.id}
                   onClick={() => toggle(c.id)}
                   className={cn(
-                    "w-full text-left text-xs px-3 py-2 rounded-lg border transition-colors flex items-center gap-2",
+                    "w-full text-left text-xs px-3 py-2 rounded-lg border transition-colors flex items-center gap-2 cursor-pointer",
                     selected.has(c.id)
                       ? "border-primary/40 bg-primary/10 text-primary"
                       : "border-border text-text-muted hover:border-border-hover hover:text-text"
                   )}
                 >
+                  <ClientLogo clientId={c.id} clientName={c.name} size={20} />
                   <span className="flex-1">{c.name}</span>
                   <span className="text-[10px] text-text-muted/40 font-mono truncate max-w-[120px]">{c.skillsPath}</span>
                   {selected.has(c.id) && (
@@ -202,7 +204,7 @@ export default function InstallSkillDialog({
                   <span className="flex-1 font-mono text-[10px] truncate" title={customPath}>{customPath}</span>
                   <button
                     onClick={() => setCustomPath(null)}
-                    className="flex-shrink-0 hover:text-red-400 transition-colors"
+                    className="flex-shrink-0 hover:text-red-400 transition-colors cursor-pointer"
                     title="Remove custom path"
                   >
                     <X size={12} />
@@ -212,7 +214,7 @@ export default function InstallSkillDialog({
                 <button
                   onClick={handlePickFolder}
                   disabled={pickingFolder}
-                  className="w-full text-left text-xs px-3 py-2 rounded-lg border border-dashed border-border text-text-muted hover:border-primary/40 hover:text-primary transition-colors flex items-center gap-2 disabled:opacity-50"
+                  className="w-full text-left text-xs px-3 py-2 rounded-lg border border-dashed border-border text-text-muted hover:border-primary/40 hover:text-primary transition-colors flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
                 >
                   <FolderOpen size={12} className="flex-shrink-0" />
                   <span className="flex-1">{pickingFolder ? "Selecting folder…" : "Custom folder…"}</span>
@@ -232,14 +234,14 @@ export default function InstallSkillDialog({
           <button
             onClick={onClose}
             disabled={installing}
-            className="text-xs px-4 py-2 rounded-lg border border-border text-text-muted hover:text-text transition-colors disabled:opacity-50"
+            className="text-xs px-4 py-2 rounded-lg border border-border text-text-muted hover:text-text transition-colors disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
           >
             Cancel
           </button>
           <button
             onClick={handleInstall}
             disabled={installing || (selected.size === 0 && !customPath)}
-            className="text-xs font-medium px-4 py-2 rounded-lg bg-primary/10 border border-primary/30 text-primary hover:bg-primary/15 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center gap-2"
+            className="text-xs font-medium px-4 py-2 rounded-lg bg-primary/10 border border-primary/30 text-primary hover:bg-primary/15 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center gap-2 cursor-pointer"
           >
             {installing && (
               <span className="inline-block w-3.5 h-3.5 border-2 border-primary/35 border-t-primary rounded-full animate-spin" />

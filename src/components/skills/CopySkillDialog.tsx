@@ -4,6 +4,7 @@ import { cn } from "../../lib/utils";
 import { getSkillableClients } from "../../store/skillStore";
 import { useClientStore } from "../../store/clientStore";
 import type { InstalledSkill } from "../../store/skillStore";
+import { ClientLogo } from "./ClientLogo";
 
 interface Props {
   skill: InstalledSkill;
@@ -54,7 +55,7 @@ export default function CopySkillDialog({ skill, sourceClientId, onClose, onCopy
       <div className="w-full max-w-sm bg-surface border border-border rounded-xl shadow-2xl">
         <div className="flex items-center justify-between px-5 py-4 border-b border-border">
           <h2 className="text-sm font-semibold text-text">Copy Skill to Clients</h2>
-          <button onClick={onClose} className="text-text-muted hover:text-text transition-colors">
+          <button onClick={onClose} className="text-text-muted hover:text-text transition-colors cursor-pointer">
             <X size={16} />
           </button>
         </div>
@@ -78,13 +79,14 @@ export default function CopySkillDialog({ skill, sourceClientId, onClose, onCopy
                     key={c.id}
                     onClick={() => toggle(c.id)}
                     className={cn(
-                      "w-full text-left text-xs px-3 py-2 rounded-lg border transition-colors flex items-center justify-between",
+                      "w-full text-left text-xs px-3 py-2 rounded-lg border transition-colors flex items-center justify-between cursor-pointer",
                       selected.has(c.id)
                         ? "border-primary/40 bg-primary/10 text-primary"
                         : "border-border text-text-muted hover:border-border-hover hover:text-text"
                     )}
                   >
-                    <span>{c.name}</span>
+                    <ClientLogo clientId={c.id} clientName={c.name} size={20} />
+                    <span className="flex-1 ml-2">{c.name}</span>
                     <span className="text-[10px] text-text-muted/50 font-mono">{c.skillsPath?.replace("~", "~")}</span>
                     {selected.has(c.id) && (
                       <svg className="w-3 h-3 flex-shrink-0 ml-1" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
@@ -101,14 +103,14 @@ export default function CopySkillDialog({ skill, sourceClientId, onClose, onCopy
         </div>
 
         <div className="flex justify-end gap-2 px-5 py-4 border-t border-border">
-          <button onClick={onClose} className="text-xs px-4 py-2 rounded-lg border border-border text-text-muted hover:text-text transition-colors">
+          <button onClick={onClose} className="text-xs px-4 py-2 rounded-lg border border-border text-text-muted hover:text-text transition-colors cursor-pointer">
             Cancel
           </button>
           {clients.length > 0 && (
             <button
               onClick={handleCopy}
               disabled={copying || selected.size === 0}
-              className="text-xs font-medium px-4 py-2 rounded-lg bg-primary/10 border border-primary/30 text-primary hover:bg-primary/15 disabled:opacity-50 transition-colors"
+              className="text-xs font-medium px-4 py-2 rounded-lg bg-primary/10 border border-primary/30 text-primary hover:bg-primary/15 disabled:opacity-50 disabled:cursor-not-allowed transition-colors cursor-pointer"
             >
               {copying ? "Copying…" : `Copy to ${selected.size || ""} client${selected.size !== 1 ? "s" : ""}`}
             </button>

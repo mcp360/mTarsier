@@ -2,10 +2,12 @@ import { Trash2, Copy, FolderOpen, Eye, Star } from "lucide-react";
 import { cn } from "../../lib/utils";
 import { useFavoritesStore } from "../../store/skillStore";
 import type { InstalledSkill } from "../../store/skillStore";
+import { ClientLogo } from "./ClientLogo";
 
 interface Props {
   skill: InstalledSkill;
   clientName?: string;
+  clientId?: string;
   selectionMode?: boolean;
   selected?: boolean;
   onToggleSelect?: () => void;
@@ -18,6 +20,7 @@ interface Props {
 export default function SkillCard({
   skill,
   clientName,
+  clientId,
   selectionMode = false,
   selected = false,
   onToggleSelect,
@@ -45,9 +48,7 @@ export default function SkillCard({
       {clientName && (
         <div className="flex">
           <div className="flex items-center gap-1.5 px-3 py-1.5 bg-surface-overlay border-b border-r border-border rounded-br-2xl">
-            <div className="w-4 h-4 rounded-full bg-primary flex items-center justify-center flex-shrink-0">
-              <span className="text-[9px] font-bold text-white leading-none">{clientName[0].toUpperCase()}</span>
-            </div>
+            <ClientLogo clientId={clientId ?? ""} clientName={clientName} size={16} />
             <span className="text-[11px] font-semibold text-text tracking-tight">{clientName}</span>
           </div>
         </div>
@@ -116,7 +117,7 @@ export default function SkillCard({
       <div className="flex items-center justify-between gap-2 border-t border-border/60 px-4 py-2.5">
         <button
           onClick={(e) => { e.stopPropagation(); onOpenInFinder(skill); }}
-          className="inline-flex items-center gap-1 text-[10px] text-text-muted/50 hover:text-text-muted font-mono transition-colors truncate min-w-0"
+          className="inline-flex items-center gap-1 text-[10px] text-text-muted/50 hover:text-text-muted font-mono transition-colors truncate min-w-0 cursor-pointer"
           title={skill.path}
         >
           <svg className="w-3 h-3 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
@@ -129,28 +130,28 @@ export default function SkillCard({
           <div className="flex items-center gap-0.5 flex-shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
             <button
               onClick={(e) => { e.stopPropagation(); onView(skill); }}
-              className="p-1.5 rounded text-text-muted hover:text-primary hover:bg-primary/10 transition-colors"
+              className="p-1.5 rounded text-text-muted hover:text-primary hover:bg-primary/10 transition-colors cursor-pointer"
               title="View skill"
             >
               <Eye size={12} />
             </button>
             <button
               onClick={(e) => { e.stopPropagation(); onOpenInFinder(skill); }}
-              className="p-1.5 rounded text-text-muted hover:text-text hover:bg-surface-overlay transition-colors"
+              className="p-1.5 rounded text-text-muted hover:text-text hover:bg-surface-overlay transition-colors cursor-pointer"
               title="Open in Finder"
             >
               <FolderOpen size={12} />
             </button>
             <button
               onClick={(e) => { e.stopPropagation(); onCopyTo(skill); }}
-              className="p-1.5 rounded text-text-muted hover:text-cyan hover:bg-cyan/10 transition-colors"
+              className="p-1.5 rounded text-text-muted hover:text-cyan hover:bg-cyan/10 transition-colors cursor-pointer"
               title="Copy to other clients"
             >
               <Copy size={12} />
             </button>
             <button
               onClick={(e) => { e.stopPropagation(); onDelete(skill); }}
-              className="p-1.5 rounded text-text-muted hover:text-red-400 hover:bg-red-400/10 transition-colors"
+              className="p-1.5 rounded text-text-muted hover:text-red-400 hover:bg-red-400/10 transition-colors cursor-pointer"
               title="Delete skill"
             >
               <Trash2 size={12} />

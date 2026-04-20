@@ -35,7 +35,6 @@ dist-ssr
 .windsurf/
 /skills/
 skills-lock.json
-test-deeplink.html
 
 # Tauri
 src-tauri/target/

@@ -13,6 +13,7 @@ import ViewSkillDialog from "../components/skills/ViewSkillDialog";
 import RegistrySkillCard, { RegistrySkillListRow } from "../components/skills/RegistrySkillCard";
 import type { SkillSearchResult } from "../components/skills/RegistrySkillCard";
 import { useFavoritesStore } from "../store/skillStore";
+import { ClientLogo } from "../components/skills/ClientLogo";
 
 type Tab = "installed" | "favorites" | "discover";
 
@@ -143,7 +144,7 @@ function Skills() {
       <div className="flex gap-1 mb-5 border-b border-border">
         {(["installed", "favorites", "discover"] as Tab[]).map((t) => (
           <button key={t} onClick={() => setTab(t)}
-            className={cn("text-xs px-3 py-2 border-b-2 -mb-px transition-colors capitalize cursor-pointer",
+            className={cn("text-xs px-3 py-2 border-b-2 -mb-px transition-colors capitalize cursor-pointer focus:outline-none",
               tab === t ? "border-primary text-primary" : "border-transparent text-text-muted hover:text-text"
             )}>{t}</button>
         ))}
@@ -387,11 +388,11 @@ function ContentPanel({ content, onSave, onDirtyChange }: {
         <div className="flex items-center gap-1">
           <button
             onClick={() => setMode("raw")}
-            className={cn("px-2.5 py-1 rounded text-[11px] transition-colors", mode === "raw" ? "bg-primary/15 text-primary" : "text-text-muted hover:text-text")}
+            className={cn("px-2.5 py-1 rounded text-[11px] transition-colors cursor-pointer", mode === "raw" ? "bg-primary/15 text-primary" : "text-text-muted hover:text-text")}
           >Raw</button>
           <button
             onClick={() => setMode("preview")}
-            className={cn("px-2.5 py-1 rounded text-[11px] transition-colors", mode === "preview" ? "bg-primary/15 text-primary" : "text-text-muted hover:text-text")}
+            className={cn("px-2.5 py-1 rounded text-[11px] transition-colors cursor-pointer", mode === "preview" ? "bg-primary/15 text-primary" : "text-text-muted hover:text-text")}
           >Preview</button>
         </div>
         <div className="flex items-center gap-2">
@@ -399,7 +400,7 @@ function ContentPanel({ content, onSave, onDirtyChange }: {
           {isDirty && mode === "raw" && (
             <button
               onClick={handleDiscard}
-              className="px-2.5 py-1 rounded text-[11px] text-text-muted hover:text-text transition-colors cursor-pointer"
+              className="px-2.5 py-1 rounded text-[11px] text-text-muted hover:text-text transition-colors cursor-pointer focus:outline-none"
             >Discard</button>
           )}
           {(isDirty || saved) && mode === "raw" && (
@@ -535,6 +536,7 @@ function FavoritesTab({ clients, onOpenInFinder, onView, onCopyTo, onDelete, onS
               key={s.path}
               skill={s}
               clientName={s.clientName}
+              clientId={(s as any).clientId}
               onOpenInFinder={onOpenInFinder}
               onView={onView}
               onCopyTo={onCopyTo}
@@ -593,10 +595,10 @@ function FavoritesTab({ clients, onOpenInFinder, onView, onCopyTo, onDelete, onS
                     <p className="text-[10px] font-mono text-text-muted/60 mt-0.5 truncate max-w-xs">{activeSkill.path}</p>
                   </div>
                   <div className="flex items-center gap-1">
-                    <button onClick={() => onView(activeSkill)} className="p-1.5 rounded text-text-muted hover:text-primary hover:bg-primary/10 transition-colors" title="View in dialog"><Eye size={13} /></button>
-                    <button onClick={() => onOpenInFinder(activeSkill)} className="p-1.5 rounded text-text-muted hover:text-text hover:bg-surface-overlay transition-colors" title="Open in Finder"><FolderOpen size={13} /></button>
-                    <button onClick={() => onCopyTo(activeSkill)} className="p-1.5 rounded text-text-muted hover:text-cyan hover:bg-cyan/10 transition-colors" title="Copy to clients"><Copy size={13} /></button>
-                    <button onClick={() => onDelete(activeSkill)} className="p-1.5 rounded text-text-muted hover:text-red-400 hover:bg-red-400/10 transition-colors" title="Delete"><Trash2 size={13} /></button>
+                    <button onClick={() => onView(activeSkill)} className="p-1.5 rounded text-text-muted hover:text-primary hover:bg-primary/10 transition-colors cursor-pointer" title="View in dialog"><Eye size={13} /></button>
+                    <button onClick={() => onOpenInFinder(activeSkill)} className="p-1.5 rounded text-text-muted hover:text-text hover:bg-surface-overlay transition-colors cursor-pointer" title="Open in Finder"><FolderOpen size={13} /></button>
+                    <button onClick={() => onCopyTo(activeSkill)} className="p-1.5 rounded text-text-muted hover:text-cyan hover:bg-cyan/10 transition-colors cursor-pointer" title="Copy to clients"><Copy size={13} /></button>
+                    <button onClick={() => onDelete(activeSkill)} className="p-1.5 rounded text-text-muted hover:text-red-400 hover:bg-red-400/10 transition-colors cursor-pointer" title="Delete"><Trash2 size={13} /></button>
                   </div>
                 </div>
                 <ContentPanel
@@ -795,11 +797,14 @@ function InstalledTab({ clients, selectedClientId, skills, isLoading, onSelectCl
           </button>
           {clients.map((c) => (
             <button key={c.id} onClick={() => onSelectClient(c.id)}
-              className={cn("text-xs px-2.5 py-1 rounded-full border transition-colors cursor-pointer",
+              className={cn("text-xs px-2.5 py-1 rounded-full border transition-colors cursor-pointer flex items-center gap-1.5",
                 selectedClientId === c.id
                   ? "bg-primary/10 text-primary border-primary/30"
                   : "text-text-muted border-border hover:border-border-hover hover:text-text"
-              )}>{c.name}</button>
+              )}>
+              <ClientLogo clientId={c.id} clientName={c.name} size={14} />
+              {c.name}
+            </button>
           ))}
         </div>
         <div className="flex items-center gap-2">
@@ -893,6 +898,7 @@ function InstalledTab({ clients, selectedClientId, skills, isLoading, onSelectCl
                 key={`${skillWithClient.clientId || ""}-${s.path}`}
                 skill={s}
                 clientName={isAllView ? skillWithClient.clientName : undefined}
+                clientId={isAllView ? skillWithClient.clientId : undefined}
                 selectionMode={selectionMode}
                 selected={selected.has(s.path)}
                 onToggleSelect={() => toggleSelection(s.path)}
@@ -965,10 +971,10 @@ function InstalledTab({ clients, selectedClientId, skills, isLoading, onSelectCl
                     <p className="text-[10px] font-mono text-text-muted/60 mt-0.5 truncate max-w-xs">{activeSkill.path}</p>
                   </div>
                   <div className="flex items-center gap-1">
-                    <button onClick={() => onView(activeSkill)} className="p-1.5 rounded text-text-muted hover:text-primary hover:bg-primary/10 transition-colors" title="View in dialog"><Eye size={13} /></button>
-                    <button onClick={() => onOpenInFinder(activeSkill)} className="p-1.5 rounded text-text-muted hover:text-text hover:bg-surface-overlay transition-colors" title="Open in Finder"><FolderOpen size={13} /></button>
-                    <button onClick={() => onCopyTo(activeSkill)} className="p-1.5 rounded text-text-muted hover:text-cyan hover:bg-cyan/10 transition-colors" title="Copy to clients"><Copy size={13} /></button>
-                    <button onClick={() => onDelete(activeSkill)} className="p-1.5 rounded text-text-muted hover:text-red-400 hover:bg-red-400/10 transition-colors" title="Delete"><Trash2 size={13} /></button>
+                    <button onClick={() => onView(activeSkill)} className="p-1.5 rounded text-text-muted hover:text-primary hover:bg-primary/10 transition-colors cursor-pointer" title="View in dialog"><Eye size={13} /></button>
+                    <button onClick={() => onOpenInFinder(activeSkill)} className="p-1.5 rounded text-text-muted hover:text-text hover:bg-surface-overlay transition-colors cursor-pointer" title="Open in Finder"><FolderOpen size={13} /></button>
+                    <button onClick={() => onCopyTo(activeSkill)} className="p-1.5 rounded text-text-muted hover:text-cyan hover:bg-cyan/10 transition-colors cursor-pointer" title="Copy to clients"><Copy size={13} /></button>
+                    <button onClick={() => onDelete(activeSkill)} className="p-1.5 rounded text-text-muted hover:text-red-400 hover:bg-red-400/10 transition-colors cursor-pointer" title="Delete"><Trash2 size={13} /></button>
                   </div>
                 </div>
                 {/* Raw / Preview toggle + content */}
@@ -1251,7 +1257,7 @@ function DiscoverTab({
                   setError(null);
                   setSearching(false);
                 }}
-                className="absolute right-3 top-1/2 -translate-y-1/2 p-0.5 text-text-muted hover:text-text transition-colors"
+                className="absolute right-3 top-1/2 -translate-y-1/2 p-0.5 text-text-muted hover:text-text transition-colors cursor-pointer"
                 title="Clear search"
               >
                 <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -1370,7 +1376,7 @@ function DiscoverTab({
                 <button
                   key={q}
                   onClick={() => setQuery(q)}
-                  className="text-[10px] px-2.5 py-1 rounded-full border border-border text-text-muted hover:border-primary/30 hover:text-primary transition-colors capitalize"
+                  className="text-[10px] px-2.5 py-1 rounded-full border border-border text-text-muted hover:border-primary/30 hover:text-primary transition-colors capitalize cursor-pointer"
                 >
                   {q}
                 </button>
@@ -1558,7 +1564,7 @@ function BundleList({
                       <button
                         onClick={() => onInstall(s)}
                         disabled={installingSource === s.id}
-                        className="flex-shrink-0 text-[11px] font-medium px-3 py-1 rounded-md border border-border text-text-muted hover:border-primary/40 hover:text-primary hover:bg-primary/5 disabled:opacity-50 transition-colors"
+                        className="flex-shrink-0 text-[11px] font-medium px-3 py-1 rounded-md border border-border text-text-muted hover:border-primary/40 hover:text-primary hover:bg-primary/5 disabled:opacity-50 disabled:cursor-not-allowed transition-colors cursor-pointer"
                       >
                         {installingSource === s.id ? "Installing…" : "Install"}
                       </button>
@@ -1585,8 +1591,8 @@ function DeleteConfirmDialog({ skill, onConfirm, onCancel }: {
           <p className="text-xs text-text-muted mt-1">"<span className="text-text">{skill.name}</span>" will be permanently removed from disk.</p>
         </div>
         <div className="flex justify-end gap-2">
-          <button onClick={onCancel} className="text-xs px-4 py-2 rounded-lg border border-border text-text-muted hover:text-text transition-colors">Cancel</button>
-          <button onClick={onConfirm} className="text-xs font-medium px-4 py-2 rounded-lg bg-red-500/10 border border-red-500/30 text-red-400 hover:bg-red-500/15 transition-colors">Delete</button>
+          <button onClick={onCancel} className="text-xs px-4 py-2 rounded-lg border border-border text-text-muted hover:text-text transition-colors cursor-pointer">Cancel</button>
+          <button onClick={onConfirm} className="text-xs font-medium px-4 py-2 rounded-lg bg-red-500/10 border border-red-500/30 text-red-400 hover:bg-red-500/15 transition-colors cursor-pointer">Delete</button>
         </div>
       </div>
     </div>
