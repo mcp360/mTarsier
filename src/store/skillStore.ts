@@ -5,6 +5,7 @@ import type { ClientMeta } from "../types/client";
 export interface InstalledSkill {
   name: string;
   description: string;
+  version?: string;
   path: string;
   raw_content: string;
 }
@@ -67,6 +68,30 @@ export const useSkillStore = create<SkillStore>((set, get) => ({
     await get().loadSkills(skillsPath);
   },
 }));
+
+const FAVORITES_KEY = "mtarsier-skill-favorites";
+
+interface FavoritesStore {
+  favorites: Set<string>;
+  toggle: (path: string) => void;
+  isFavorite: (path: string) => boolean;
+}
+
+export const useFavoritesStore = create<FavoritesStore>((set, get) => {
+  const stored = localStorage.getItem(FAVORITES_KEY);
+  const initial: Set<string> = stored ? new Set(JSON.parse(stored)) : new Set();
+  return {
+    favorites: initial,
+    toggle: (path) => {
+      const next = new Set(get().favorites);
+      if (next.has(path)) next.delete(path);
+      else next.add(path);
+      localStorage.setItem(FAVORITES_KEY, JSON.stringify([...next]));
+      set({ favorites: next });
+    },
+    isFavorite: (path) => get().favorites.has(path),
+  };
+});
 
 export function getSkillableClients(detectedClients: ClientMeta[]): ClientMeta[] {
   const seen = new Set<string>();

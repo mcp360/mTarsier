@@ -1,5 +1,6 @@
 import { useClientStore } from "../../store/clientStore";
 import type { ClientState } from "../../types/client";
+import { ClientLogo } from "../skills/ClientLogo";
 
 const typeBadge: Record<string, string> = {
   Desktop: "bg-surface-overlay text-text-muted",
@@ -27,6 +28,7 @@ function ClientCard({ client }: { client: ClientState }) {
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2">
+            <ClientLogo clientId={meta.id} clientName={meta.name} size={20} />
             <span className="font-semibold text-text">{meta.name}</span>
             <span className={`rounded px-1.5 py-0.5 text-[11px] font-medium ${typeBadge[meta.type]}`}>
               {meta.type}

@@ -11,6 +11,9 @@ const ACTION_LABELS: Record<string, { label: string; color: string }> = {
   backup_delete: { label: "Backup Deleted", color: "text-red-400" },
   server_add: { label: "Server Added", color: "text-primary" },
   server_remove: { label: "Server Removed", color: "text-red-400" },
+  skill_add: { label: "Skill Added", color: "text-cyan" },
+  skill_delete: { label: "Skill Deleted", color: "text-red-400" },
+  skill_copy: { label: "Skill Copied", color: "text-cyan" },
 };
 
 function formatTimestamp(iso: string): string {
@@ -187,7 +190,9 @@ function AuditLogs() {
                   <div className="mt-1.5 flex-shrink-0">
                     <div
                       className={`w-2 h-2 rounded-full ${
-                        meta.color === "text-primary" ? "bg-primary" : "bg-red-400"
+                        meta.color === "text-primary" ? "bg-primary"
+                        : meta.color === "text-cyan" ? "bg-cyan"
+                        : "bg-red-400"
                       }`}
                     />
                   </div>

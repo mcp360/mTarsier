@@ -1,9 +1,12 @@
-import { useEffect, useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { invoke } from "@tauri-apps/api/core";
 import { useClientStore } from "../store/clientStore";
 import { useAuditStore } from "../store/auditStore";
+import { getSkillableClients } from "../store/skillStore";
 import { useSettingsStore } from "../store/settingsStore";
 import type { ClientType } from "../types/client";
+import type { InstalledSkill } from "../store/skillStore";
 
 const CLIENT_TYPES: ClientType[] = ["Desktop", "IDE", "CLI"];
 
@@ -24,6 +27,9 @@ const ACTION_LABELS: Record<string, { label: string; color: string; dot: string 
   backup_delete: { label: "Backup Deleted", color: "text-red-400", dot: "bg-red-400" },
   server_add: { label: "Server Added", color: "text-primary", dot: "bg-primary" },
   server_remove: { label: "Server Removed", color: "text-red-400", dot: "bg-red-400" },
+  skill_add: { label: "Skill Added", color: "text-cyan", dot: "bg-cyan" },
+  skill_delete: { label: "Skill Deleted", color: "text-red-400", dot: "bg-red-400" },
+  skill_copy: { label: "Skill Copied", color: "text-cyan", dot: "bg-cyan" },
 };
 
 function formatRelativeTime(iso: string): string {
@@ -47,11 +53,27 @@ function Dashboard() {
   const navigate = useNavigate();
   const { clients, isDetecting } = useClientStore();
   const { entries, loadLogs } = useAuditStore();
-  const auditEnabled = useSettingsStore((s) => s.auditLogsEnabled);
+  const { auditLogsEnabled: auditEnabled } = useSettingsStore();
+  const [totalSkills, setTotalSkills] = useState<number | null>(null);
 
   useEffect(() => {
-    if (auditEnabled) loadLogs();
-  }, [auditEnabled]);
+    loadLogs();
+  }, []);
+
+  useEffect(() => {
+    const detectedMetas = clients.filter((cs) => cs.installed).map((cs) => cs.meta);
+    const skillableClients = getSkillableClients(detectedMetas);
+    if (skillableClients.length === 0) { setTotalSkills(0); return; }
+    let cancelled = false;
+    Promise.all(
+      skillableClients.map((c) =>
+        invoke<InstalledSkill[]>("list_skills", { skillsPath: c.skillsPath }).catch(() => [] as InstalledSkill[])
+      )
+    ).then((results) => {
+      if (!cancelled) setTotalSkills(results.reduce((sum, arr) => sum + arr.length, 0));
+    });
+    return () => { cancelled = true; };
+  }, [clients]);
 
   const installedClients = useMemo(
     () => clients.filter((c) => c.installed),
@@ -105,7 +127,7 @@ function Dashboard() {
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
           <StatCard label="Installed Clients" value={loading ? "--" : `${installedClients.length}/${detectableCount}`} />
           <StatCard label="MCP Servers" value={loading ? "--" : String(totalServers)} />
-          <StatCard label="Configured" value={loading ? "--" : String(configuredClients)} />
+          <StatCard label="Skills" value={totalSkills === null ? "--" : String(totalSkills)} sub="across all clients" />
           <StatCard label="Recent Changes" value={String(recentChanges)} sub="last 7 days" />
         </div>
 

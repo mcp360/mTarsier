@@ -16,4 +16,7 @@ export type AuditAction =
   | "backup_restore"
   | "backup_delete"
   | "server_add"
-  | "server_remove";
+  | "server_remove"
+  | "skill_add"
+  | "skill_delete"
+  | "skill_copy";

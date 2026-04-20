@@ -788,7 +788,7 @@ function SkillsDiscoverSection({ showToast }: { showToast: (msg: string) => void
                 skill={skill}
                 installing={installingSource === skill.id}
                 onInstall={setPendingInstall}
-              />
+                    />
             ))}
           </div>
         </div>

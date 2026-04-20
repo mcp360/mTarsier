@@ -1,5 +1,6 @@
-import { useState, useEffect, useRef, useMemo } from "react";
+import React, { useState, useEffect, useRef, useMemo } from "react";
 import { invoke } from "@tauri-apps/api/core";
+import { LayoutGrid, List, Eye, Copy, FolderOpen, Trash2, ChevronRight, Star } from "lucide-react";
 import { cn } from "../lib/utils";
 import { useSkillStore, getSkillableClients } from "../store/skillStore";
 import { useClientStore } from "../store/clientStore";
@@ -9,10 +10,12 @@ import CopySkillDialog from "../components/skills/CopySkillDialog";
 import InstallSkillDialog from "../components/skills/InstallSkillDialog";
 import AddSkillDialog from "../components/skills/AddSkillDialog";
 import ViewSkillDialog from "../components/skills/ViewSkillDialog";
-import RegistrySkillCard from "../components/skills/RegistrySkillCard";
+import RegistrySkillCard, { RegistrySkillListRow } from "../components/skills/RegistrySkillCard";
 import type { SkillSearchResult } from "../components/skills/RegistrySkillCard";
+import { useFavoritesStore } from "../store/skillStore";
+import { ClientLogo } from "../components/skills/ClientLogo";
 
-type Tab = "installed" | "discover";
+type Tab = "installed" | "favorites" | "discover";
 
 function Skills() {
   const [tab, setTab] = useState<Tab>("installed");
@@ -22,6 +25,7 @@ function Skills() {
   const [deleting, setDeleting] = useState<InstalledSkill | null>(null);
   const [toast, setToast] = useState<string | null>(null);
   const [refreshKey, setRefreshKey] = useState(0);
+  const { toggle: toggleFavorite, isFavorite } = useFavoritesStore();
 
   const { clients: clientStates } = useClientStore();
   // Filter out false positives: clients marked as installed but whose binary doesn't actually exist
@@ -62,6 +66,13 @@ function Skills() {
         await writeSkill(targetClient.skillsPath, skill.name, skill.raw_content);
       }
     }
+    invoke("log_audit_entry", {
+      action: "skill_copy",
+      clientId: null,
+      clientName: null,
+      detail: `Copied skill "${skill.name}" to ${targetClientIds.length} client${targetClientIds.length > 1 ? "s" : ""}`,
+      configPath: null,
+    }).catch(() => {});
     showToast(`"${skill.name}" copied to ${targetClientIds.length} client${targetClientIds.length > 1 ? "s" : ""}`);
     setRefreshKey((k) => k + 1);
   };
@@ -69,17 +80,26 @@ function Skills() {
   const handleDelete = async () => {
     if (!deleting) return;
     let skillsPath: string | undefined;
-    if (selectedClientId === "all") {
-      const withClient = deleting as InstalledSkill & { clientId?: string };
+    const withClient = deleting as InstalledSkill & { clientId?: string };
+    if (withClient.clientId) {
       skillsPath = clients.find((c) => c.id === withClient.clientId)?.skillsPath;
-    } else {
-      if (!selectedClient) return;
+    } else if (selectedClientId !== "all" && selectedClient) {
       skillsPath = selectedClient.skillsPath;
     }
     if (!skillsPath) return;
+    const deletedName = deleting.name;
+    const deletedClient = clients.find((c) => c.skillsPath === skillsPath);
     await deleteSkill(deleting.path, skillsPath);
+    if (isFavorite(deleting.path)) toggleFavorite(deleting.path);
+    invoke("log_audit_entry", {
+      action: "skill_delete",
+      clientId: deletedClient?.id ?? null,
+      clientName: deletedClient?.name ?? null,
+      detail: `Deleted skill "${deletedName}"`,
+      configPath: null,
+    }).catch(() => {});
     setDeleting(null);
-    showToast(`Deleted "${deleting.name}"`);
+    showToast(`Deleted "${deletedName}"`);
   };
 
   const handleAddSkill = async (skillName: string, content: string) => {
@@ -88,6 +108,13 @@ function Skills() {
       throw new Error("A skill with this name already exists for the selected client");
     }
     await writeSkill(selectedClient.skillsPath, skillName, content);
+    invoke("log_audit_entry", {
+      action: "skill_add",
+      clientId: selectedClient.id,
+      clientName: selectedClient.name,
+      detail: `Added skill "${skillName}"`,
+      configPath: null,
+    }).catch(() => {});
     showToast(`"${skillName}" added to ${selectedClient?.name ?? "selected client"}`);
   };
 
@@ -115,9 +142,9 @@ function Skills() {
       </div>
 
       <div className="flex gap-1 mb-5 border-b border-border">
-        {(["installed", "discover"] as Tab[]).map((t) => (
+        {(["installed", "favorites", "discover"] as Tab[]).map((t) => (
           <button key={t} onClick={() => setTab(t)}
-            className={cn("text-xs px-3 py-2 border-b-2 -mb-px transition-colors capitalize cursor-pointer",
+            className={cn("text-xs px-3 py-2 border-b-2 -mb-px transition-colors capitalize cursor-pointer focus:outline-none",
               tab === t ? "border-primary text-primary" : "border-transparent text-text-muted hover:text-text"
             )}>{t}</button>
         ))}
@@ -136,6 +163,18 @@ function Skills() {
           deleteSkills={deleteSkills}
           showToast={showToast}
           refreshKey={refreshKey}
+          onSaveSkill={async (skill: InstalledSkill, content: string) => { await writeSkill(skill.path.replace(/\/[^/]+$/, ""), skill.name, content); }}
+        />
+      )}
+      {tab === "favorites" && (
+        <FavoritesTab
+          clients={clients}
+          onOpenInFinder={handleOpenInFinder}
+          onView={setViewing}
+          onCopyTo={setCopying}
+          onDelete={setDeleting}
+          onSaveSkill={async (skill: InstalledSkill, content: string) => { await writeSkill(skill.path.replace(/\/[^/]+$/, ""), skill.name, content); }}
+          onGoToDiscover={() => setTab("discover")}
         />
       )}
       {tab === "discover" && (
@@ -180,7 +219,407 @@ function Skills() {
   );
 }
 
-function InstalledTab({ clients, selectedClientId, skills, isLoading, onSelectClient, onAdd, canAdd, onOpenInFinder, onView, onCopyTo, onDelete, deleteSkills, showToast, refreshKey }: {
+function parseTableRow(line: string): string[] {
+  return line.split("|").slice(1, -1).map((c) => c.trim());
+}
+
+function isSeparatorRow(cells: string[]): boolean {
+  return cells.every((c) => /^:?-+:?$/.test(c));
+}
+
+function renderMarkdown(content: string) {
+  const lines = content.split("\n");
+  const elements: React.ReactNode[] = [];
+  let i = 0;
+
+  while (i < lines.length) {
+    const line = lines[i];
+
+    // Code block
+    if (line.startsWith("```")) {
+      const lang = line.slice(3).trim();
+      const codeLines: string[] = [];
+      i++;
+      while (i < lines.length && !lines[i].startsWith("```")) {
+        codeLines.push(lines[i]);
+        i++;
+      }
+      elements.push(
+        <pre key={i} className="my-2 rounded-md bg-surface-overlay border border-border px-3 py-2 text-[10px] font-mono text-text overflow-x-auto">
+          {lang && <span className="text-text-muted/50 text-[9px] block mb-1">{lang}</span>}
+          {codeLines.join("\n")}
+        </pre>
+      );
+    } else if (line.trimStart().startsWith("|")) {
+      const tableLines: string[] = [];
+      while (i < lines.length && lines[i].trimStart().startsWith("|")) {
+        tableLines.push(lines[i]);
+        i++;
+      }
+      const rows = tableLines.map(parseTableRow);
+      const headerRow = rows[0] ?? [];
+      const dataRows = rows.filter((_, idx) => idx > 0 && !isSeparatorRow(rows[idx]));
+      elements.push(
+        <div key={i} className="my-2 overflow-x-auto">
+          <table className="w-full text-[11px] border-collapse">
+            <thead>
+              <tr>
+                {headerRow.map((cell, j) => (
+                  <th key={j} className="border border-border px-2.5 py-1.5 text-left font-semibold text-text bg-surface-overlay">
+                    {cell}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {dataRows.map((row, ri) => (
+                <tr key={ri} className={ri % 2 === 0 ? "bg-surface" : "bg-surface-overlay/40"}>
+                  {row.map((cell, ci) => (
+                    <td key={ci} className="border border-border px-2.5 py-1.5 text-text-muted">
+                      {cell}
+                    </td>
+                  ))}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      );
+      continue;
+    } else if (line.startsWith("### ")) {
+      elements.push(<h3 key={i} className="text-[11px] font-bold text-text mt-3 mb-1">{line.slice(4)}</h3>);
+    } else if (line.startsWith("## ")) {
+      elements.push(<h2 key={i} className="text-xs font-bold text-text mt-4 mb-1">{line.slice(3)}</h2>);
+    } else if (line.startsWith("# ")) {
+      elements.push(<h1 key={i} className="text-sm font-bold text-text mt-4 mb-1">{line.slice(2)}</h1>);
+    } else if (line.startsWith("- ") || line.startsWith("* ")) {
+      elements.push(
+        <div key={i} className="flex gap-1.5 text-[11px] text-text leading-relaxed">
+          <span className="text-text-muted flex-shrink-0 mt-px">•</span>
+          <span>{line.slice(2)}</span>
+        </div>
+      );
+    } else if (line.trim() === "") {
+      elements.push(<div key={i} className="h-2" />);
+    } else {
+      // Inline bold
+      const parts = line.split(/(\*\*[^*]+\*\*)/g);
+      elements.push(
+        <p key={i} className="text-[11px] text-text leading-relaxed">
+          {parts.map((part, j) =>
+            part.startsWith("**") && part.endsWith("**")
+              ? <strong key={j} className="font-semibold">{part.slice(2, -2)}</strong>
+              : part
+          )}
+        </p>
+      );
+    }
+    i++;
+  }
+  return elements;
+}
+
+function stripFrontmatter(content: string): string {
+  const trimmed = content.trimStart();
+  if (!trimmed.startsWith("---")) return content;
+  const after = trimmed.slice(3);
+  const close = after.indexOf("\n---");
+  if (close === -1) return content;
+  return after.slice(close + 4).trimStart();
+}
+
+function ContentPanel({ content, onSave, onDirtyChange }: {
+  content: string;
+  onSave: (updated: string) => Promise<void>;
+  onDirtyChange: (dirty: boolean) => void;
+}) {
+  const [mode, setMode] = useState<"raw" | "preview">("raw");
+  const [edited, setEdited] = useState(content);
+  const [baseline, setBaseline] = useState(content);
+  const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
+  const textareaRef = React.useRef<HTMLTextAreaElement>(null);
+  const isDirty = edited !== baseline;
+
+  // Reset when skill changes
+  React.useEffect(() => { setEdited(content); setBaseline(content); setSaveError(null); setSaved(false); }, [content]);
+
+  // Notify parent of dirty state
+  React.useEffect(() => { onDirtyChange(isDirty); }, [isDirty, onDirtyChange]);
+
+  const handleSave = async () => {
+    setSaving(true);
+    setSaveError(null);
+    try {
+      await onSave(edited);
+      setBaseline(edited);
+      setSaved(true);
+      setTimeout(() => setSaved(false), 1500);
+    } catch (e) {
+      setSaveError(String(e));
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleDiscard = () => {
+    setEdited(baseline);
+    setSaveError(null);
+  };
+
+  // Cmd+S / Ctrl+S to save
+  React.useEffect(() => {
+    const el = textareaRef.current;
+    if (!el) return;
+    const handler = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key === "s") {
+        e.preventDefault();
+        if (isDirty && !saving) handleSave();
+      }
+    };
+    el.addEventListener("keydown", handler);
+    return () => el.removeEventListener("keydown", handler);
+  }, [isDirty, saving, edited]);
+
+  return (
+    <div className="flex-1 flex flex-col overflow-hidden">
+      <div className="flex-shrink-0 flex items-center justify-between px-4 py-2 border-b border-border bg-surface">
+        <div className="flex items-center gap-1">
+          <button
+            onClick={() => setMode("raw")}
+            className={cn("px-2.5 py-1 rounded text-[11px] transition-colors cursor-pointer", mode === "raw" ? "bg-primary/15 text-primary" : "text-text-muted hover:text-text")}
+          >Raw</button>
+          <button
+            onClick={() => setMode("preview")}
+            className={cn("px-2.5 py-1 rounded text-[11px] transition-colors cursor-pointer", mode === "preview" ? "bg-primary/15 text-primary" : "text-text-muted hover:text-text")}
+          >Preview</button>
+        </div>
+        <div className="flex items-center gap-2">
+          {saveError && <span className="text-[10px] text-red-400 truncate max-w-[200px]" title={saveError}>Error: {saveError}</span>}
+          {isDirty && mode === "raw" && (
+            <button
+              onClick={handleDiscard}
+              className="px-2.5 py-1 rounded text-[11px] text-text-muted hover:text-text transition-colors cursor-pointer focus:outline-none"
+            >Discard</button>
+          )}
+          {(isDirty || saved) && mode === "raw" && (
+            <button
+              onClick={handleSave}
+              disabled={saving}
+              className={cn("px-2.5 py-1 rounded text-[11px] transition-colors disabled:opacity-50 cursor-pointer disabled:cursor-not-allowed", saved ? "bg-green-500/15 text-green-400" : "bg-primary/15 text-primary hover:bg-primary/25")}
+            >
+              {saving ? "Saving…" : saved ? "Saved!" : "Save"}
+            </button>
+          )}
+        </div>
+      </div>
+      <div className="flex-1 overflow-hidden">
+        {mode === "raw"
+          ? <textarea
+              ref={textareaRef}
+              value={edited}
+              onChange={(e) => setEdited(e.target.value)}
+              className="w-full h-full p-4 text-[11px] font-mono text-text leading-relaxed bg-transparent resize-none outline-none"
+              spellCheck={false}
+            />
+          : <div className="h-full overflow-y-auto p-4 space-y-0.5">{renderMarkdown(stripFrontmatter(edited))}</div>
+        }
+      </div>
+    </div>
+  );
+}
+
+function FavoritesTab({ clients, onOpenInFinder, onView, onCopyTo, onDelete, onSaveSkill, onGoToDiscover }: {
+  clients: ReturnType<typeof getSkillableClients>;
+  onOpenInFinder: (s: InstalledSkill) => void;
+  onView: (s: InstalledSkill) => void;
+  onCopyTo: (s: InstalledSkill) => void;
+  onDelete: (s: InstalledSkill) => void;
+  onSaveSkill: (skill: InstalledSkill, content: string) => Promise<void>;
+  onGoToDiscover: () => void;
+}) {
+  const { favorites } = useFavoritesStore();
+  const [allSkills, setAllSkills] = useState<Array<InstalledSkill & { clientName: string; clientId: string }>>([]);
+  const [loading, setLoading] = useState(true);
+  const [viewMode, setViewMode] = useState<"card" | "list">("card");
+  const [activeSkill, setActiveSkill] = useState<InstalledSkill | null>(null);
+  const isPanelDirty = React.useRef(false);
+
+  const trySetActiveSkill = (s: InstalledSkill) => {
+    if (isPanelDirty.current && activeSkill?.path !== s.path) {
+      if (!window.confirm("You have unsaved changes. Discard and switch skill?")) return;
+    }
+    setActiveSkill(s);
+  };
+
+  useEffect(() => {
+    const load = async () => {
+      setLoading(true);
+      const result: Array<InstalledSkill & { clientName: string; clientId: string }> = [];
+      for (const client of clients) {
+        if (!client.skillsPath) continue;
+        try {
+          const skills = await invoke<InstalledSkill[]>("list_skills", { skillsPath: client.skillsPath });
+          result.push(...skills.map((s) => ({ ...s, clientName: client.name, clientId: client.id })));
+        } catch { /* skip client */ }
+      }
+      setAllSkills(result);
+      setLoading(false);
+    };
+    load();
+  }, [clients]);
+
+  useEffect(() => {
+    if (viewMode === "list" && !activeSkill && favorited.length > 0) {
+      setActiveSkill(favorited[0]);
+    }
+  }, [viewMode]);
+
+  const favorited = allSkills.filter((s) => favorites.has(s.path));
+
+  if (loading) {
+    return (
+      <div className="grid grid-cols-3 gap-3">
+        {[0, 1, 2].map((i) => (
+          <div key={i} className="rounded-xl border border-border bg-surface p-4 space-y-3 animate-pulse">
+            <div className="h-3 w-24 rounded bg-surface-overlay" />
+            <div className="h-2 w-full rounded bg-surface-overlay" />
+          </div>
+        ))}
+      </div>
+    );
+  }
+
+  if (favorited.length === 0) {
+    return (
+      <div className="flex flex-col items-center justify-center py-20 gap-3">
+        <Star size={28} className="text-text-muted/30" />
+        <p className="text-sm font-medium text-text-muted">No favorites yet</p>
+        <p className="text-xs text-text-muted/60">Click the star icon on any skill card to add it here</p>
+      </div>
+    );
+  }
+
+  return (
+    <div>
+      {/* Heading + Toolbar */}
+      <div className="mb-4 flex items-center justify-between">
+        <div>
+          <h2 className="text-sm font-semibold text-text">Favourite Skills</h2>
+          <p className="text-[11px] text-text-muted/60 mt-0.5">{favorited.length} skill{favorited.length !== 1 ? "s" : ""} saved</p>
+        </div>
+        <div className="flex items-center justify-end">
+          <div className="flex items-center rounded-lg border border-border overflow-hidden">
+            <button
+              onClick={() => setViewMode("card")}
+              className={cn("p-1.5 transition-colors cursor-pointer", viewMode === "card" ? "bg-primary/10 text-primary" : "text-text-muted hover:text-text")}
+              title="Card view"
+            >
+              <LayoutGrid size={13} />
+            </button>
+            <button
+              onClick={() => setViewMode("list")}
+              className={cn("p-1.5 transition-colors cursor-pointer", viewMode === "list" ? "bg-primary/10 text-primary" : "text-text-muted hover:text-text")}
+              title="List view"
+            >
+              <List size={13} />
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {viewMode === "card" ? (
+        <div className="grid grid-cols-3 gap-3">
+          {favorited.map((s) => (
+            <SkillCard
+              key={s.path}
+              skill={s}
+              clientName={s.clientName}
+              clientId={(s as any).clientId}
+              onOpenInFinder={onOpenInFinder}
+              onView={onView}
+              onCopyTo={onCopyTo}
+              onDelete={onDelete}
+            />
+          ))}
+          <button
+            onClick={onGoToDiscover}
+            className="rounded-xl border border-dashed border-border hover:border-primary/40 bg-transparent hover:bg-primary/5 flex flex-col items-center justify-center gap-2 p-6 transition-all group cursor-pointer min-h-[140px]"
+          >
+            <div className="w-8 h-8 rounded-lg border border-dashed border-border group-hover:border-primary/40 flex items-center justify-center transition-colors">
+              <Star size={14} className="text-text-muted/40 group-hover:text-primary/60 transition-colors" />
+            </div>
+            <div className="text-center">
+              <p className="text-xs font-medium text-text-muted/60 group-hover:text-text-muted transition-colors">Discover more skills</p>
+              <p className="text-[10px] text-text-muted/40 mt-0.5">Browse the registry to find and star skills</p>
+            </div>
+          </button>
+        </div>
+      ) : (
+        <div className="flex rounded-lg border border-border overflow-hidden" style={{ height: "calc(100vh - 260px)" }}>
+          {/* Left: skill list */}
+          <div className="w-56 flex-shrink-0 border-r border-border bg-surface overflow-y-auto">
+            {favorited.map((s) => {
+              const isActive = activeSkill?.path === s.path;
+              return (
+                <div
+                  key={s.path}
+                  onClick={() => trySetActiveSkill(s)}
+                  className={cn(
+                    "px-3 py-2.5 border-b border-border/50 transition-colors cursor-pointer",
+                    isActive ? "bg-primary/10 text-primary" : "text-text hover:bg-surface-overlay"
+                  )}
+                >
+                  <p className="text-xs font-medium truncate">{s.name}</p>
+                  <p className="text-[10px] text-text-muted/60 truncate mt-0.5">{s.clientName}</p>
+                </div>
+              );
+            })}
+          </div>
+
+          {/* Right: content panel */}
+          <div className="flex-1 flex flex-col overflow-hidden bg-base">
+            {activeSkill ? (
+              <>
+                <div className="flex-shrink-0 flex items-center justify-between px-4 py-3 border-b border-border bg-surface">
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <p className="text-xs font-semibold text-text">{activeSkill.name}</p>
+                      {activeSkill.version && (
+                        <span className="text-[10px] px-1.5 py-0.5 rounded bg-surface-overlay border border-border text-text-muted font-mono">
+                          v{activeSkill.version}
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-[10px] font-mono text-text-muted/60 mt-0.5 truncate max-w-xs">{activeSkill.path}</p>
+                  </div>
+                  <div className="flex items-center gap-1">
+                    <button onClick={() => onView(activeSkill)} className="p-1.5 rounded text-text-muted hover:text-primary hover:bg-primary/10 transition-colors cursor-pointer" title="View in dialog"><Eye size={13} /></button>
+                    <button onClick={() => onOpenInFinder(activeSkill)} className="p-1.5 rounded text-text-muted hover:text-text hover:bg-surface-overlay transition-colors cursor-pointer" title="Open in Finder"><FolderOpen size={13} /></button>
+                    <button onClick={() => onCopyTo(activeSkill)} className="p-1.5 rounded text-text-muted hover:text-cyan hover:bg-cyan/10 transition-colors cursor-pointer" title="Copy to clients"><Copy size={13} /></button>
+                    <button onClick={() => onDelete(activeSkill)} className="p-1.5 rounded text-text-muted hover:text-red-400 hover:bg-red-400/10 transition-colors cursor-pointer" title="Delete"><Trash2 size={13} /></button>
+                  </div>
+                </div>
+                <ContentPanel
+                  content={activeSkill.raw_content}
+                  onSave={(updated) => onSaveSkill(activeSkill, updated)}
+                  onDirtyChange={(dirty) => { isPanelDirty.current = dirty; }}
+                />
+              </>
+            ) : (
+              <div className="flex-1 flex items-center justify-center">
+                <p className="text-xs text-text-muted">Select a skill to view its content</p>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function InstalledTab({ clients, selectedClientId, skills, isLoading, onSelectClient, onAdd, canAdd, onOpenInFinder, onView, onCopyTo, onDelete, deleteSkills, showToast, refreshKey, onSaveSkill }: {
   clients: ReturnType<typeof getSkillableClients>;
   selectedClientId: string | null;
   skills: InstalledSkill[];
@@ -195,7 +634,18 @@ function InstalledTab({ clients, selectedClientId, skills, isLoading, onSelectCl
   deleteSkills: (paths: string[], skillsPath: string) => Promise<void>;
   showToast: (msg: string) => void;
   refreshKey: number;
+  onSaveSkill: (skill: InstalledSkill, content: string) => Promise<void>;
 }) {
+  const [viewMode, setViewMode] = useState<"card" | "list">("card");
+  const [activeSkill, setActiveSkill] = useState<InstalledSkill | null>(null);
+  const isPanelDirty = React.useRef(false);
+
+  const trySetActiveSkill = (s: InstalledSkill) => {
+    if (isPanelDirty.current && activeSkill?.path !== s.path) {
+      if (!window.confirm("You have unsaved changes. Discard and switch skill?")) return;
+    }
+    setActiveSkill(s);
+  };
   const [selectionMode, setSelectionMode] = useState(false);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [confirmBulkDelete, setConfirmBulkDelete] = useState(false);
@@ -235,6 +685,13 @@ function InstalledTab({ clients, selectedClientId, skills, isLoading, onSelectCl
   }, [selectedClientId, clients, refreshKey]);
 
   const displaySkills = selectedClientId === "all" ? allSkills : skills;
+
+  useEffect(() => {
+    if (viewMode === "list" && !activeSkill && displaySkills.length > 0) {
+      setActiveSkill(displaySkills[0]);
+    }
+  }, [viewMode, displaySkills.length]);
+
   const showSkeleton = selectedClientId === "all"
     ? loadingAll && allSkills.length === 0
     : isLoading && skills.length === 0 && selectedClientId;
@@ -340,11 +797,14 @@ function InstalledTab({ clients, selectedClientId, skills, isLoading, onSelectCl
           </button>
           {clients.map((c) => (
             <button key={c.id} onClick={() => onSelectClient(c.id)}
-              className={cn("text-xs px-2.5 py-1 rounded-full border transition-colors cursor-pointer",
+              className={cn("text-xs px-2.5 py-1 rounded-full border transition-colors cursor-pointer flex items-center gap-1.5",
                 selectedClientId === c.id
                   ? "bg-primary/10 text-primary border-primary/30"
                   : "text-text-muted border-border hover:border-border-hover hover:text-text"
-              )}>{c.name}</button>
+              )}>
+              <ClientLogo clientId={c.id} clientName={c.name} size={14} />
+              {c.name}
+            </button>
           ))}
         </div>
         <div className="flex items-center gap-2">
@@ -389,6 +849,22 @@ function InstalledTab({ clients, selectedClientId, skills, isLoading, onSelectCl
                   Add Skill
                 </button>
               )}
+              <div className="flex items-center rounded-lg border border-border overflow-hidden">
+                <button
+                  onClick={() => setViewMode("card")}
+                  className={cn("p-1.5 transition-colors cursor-pointer", viewMode === "card" ? "bg-primary/10 text-primary" : "text-text-muted hover:text-text")}
+                  title="Card view"
+                >
+                  <LayoutGrid size={13} />
+                </button>
+                <button
+                  onClick={() => setViewMode("list")}
+                  className={cn("p-1.5 transition-colors cursor-pointer", viewMode === "list" ? "bg-primary/10 text-primary" : "text-text-muted hover:text-text")}
+                  title="List view"
+                >
+                  <List size={13} />
+                </button>
+              </div>
             </>
           )}
         </div>
@@ -412,34 +888,108 @@ function InstalledTab({ clients, selectedClientId, skills, isLoading, onSelectCl
             Browse the <span className="text-text">Discover</span> tab to install from the registry
           </p>
         </div>
-      ) : (
+      ) : viewMode === "card" ? (
         <div className="grid grid-cols-3 gap-3">
           {displaySkills.map((s) => {
             const isAllView = selectedClientId === "all";
             const skillWithClient = s as InstalledSkill & { clientName?: string; clientId?: string };
-
             return (
-              <div key={`${skillWithClient.clientId || ""}-${s.path}`} className="relative">
-                <SkillCard
-                  skill={s}
-                  selectionMode={selectionMode}
-                  selected={selected.has(s.path)}
-                  onToggleSelect={() => toggleSelection(s.path)}
-                  onOpenInFinder={onOpenInFinder}
-                  onView={onView}
-                  onCopyTo={onCopyTo}
-                  onDelete={onDelete}
-                />
-                {isAllView && skillWithClient.clientName && (
-                  <div className="absolute bottom-2 right-2">
-                    <span className="text-[10px] px-2 py-0.5 rounded-full bg-primary/10 text-primary border border-primary/30">
-                      {skillWithClient.clientName}
-                    </span>
-                  </div>
-                )}
-              </div>
+              <SkillCard
+                key={`${skillWithClient.clientId || ""}-${s.path}`}
+                skill={s}
+                clientName={isAllView ? skillWithClient.clientName : undefined}
+                clientId={isAllView ? skillWithClient.clientId : undefined}
+                selectionMode={selectionMode}
+                selected={selected.has(s.path)}
+                onToggleSelect={() => toggleSelection(s.path)}
+                onOpenInFinder={onOpenInFinder}
+                onView={onView}
+                onCopyTo={onCopyTo}
+                onDelete={onDelete}
+              />
             );
           })}
+        </div>
+      ) : (
+        /* List view — sidebar + content panel inspired by the screenshot */
+        <div className="flex rounded-lg border border-border overflow-hidden" style={{ height: "calc(100vh - 260px)" }}>
+          {/* Left: skill list */}
+          <div className="w-56 flex-shrink-0 border-r border-border bg-surface overflow-y-auto">
+            {displaySkills.map((s) => {
+              const skillWithClient = s as InstalledSkill & { clientName?: string; clientId?: string };
+              const isActive = activeSkill?.path === s.path;
+              const isSelected = selected.has(s.path);
+              return (
+                <div
+                  key={`${skillWithClient.clientId || ""}-${s.path}`}
+                  onClick={() => selectionMode ? toggleSelection(s.path) : trySetActiveSkill(s)}
+                  className={cn(
+                    "w-full text-left px-3 py-2.5 border-b border-border/50 transition-colors cursor-pointer flex items-center gap-2",
+                    selectionMode
+                      ? isSelected ? "bg-primary/10 text-primary" : "text-text hover:bg-surface-overlay"
+                      : isActive ? "bg-primary/10 text-primary" : "text-text hover:bg-surface-overlay"
+                  )}
+                >
+                  {selectionMode && (
+                    <div className={cn(
+                      "flex-shrink-0 w-4 h-4 rounded border-2 flex items-center justify-center transition-colors",
+                      isSelected ? "bg-primary border-primary" : "border-border"
+                    )}>
+                      {isSelected && (
+                        <svg className="w-2.5 h-2.5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                        </svg>
+                      )}
+                    </div>
+                  )}
+                  <div className="min-w-0">
+                    <p className="text-xs font-medium truncate">{s.name}</p>
+                    {skillWithClient.clientName && (
+                      <p className="text-[10px] text-text-muted/60 truncate mt-0.5">{skillWithClient.clientName}</p>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+
+          {/* Right: content panel */}
+          <div className="flex-1 flex flex-col overflow-hidden bg-base">
+            {activeSkill ? (
+              <>
+                {/* Header */}
+                <div className="flex-shrink-0 flex items-center justify-between px-4 py-3 border-b border-border bg-surface">
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <p className="text-xs font-semibold text-text">{activeSkill.name}</p>
+                      {activeSkill.version && (
+                        <span className="text-[10px] px-1.5 py-0.5 rounded bg-surface-overlay border border-border text-text-muted font-mono">
+                          v{activeSkill.version}
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-[10px] font-mono text-text-muted/60 mt-0.5 truncate max-w-xs">{activeSkill.path}</p>
+                  </div>
+                  <div className="flex items-center gap-1">
+                    <button onClick={() => onView(activeSkill)} className="p-1.5 rounded text-text-muted hover:text-primary hover:bg-primary/10 transition-colors cursor-pointer" title="View in dialog"><Eye size={13} /></button>
+                    <button onClick={() => onOpenInFinder(activeSkill)} className="p-1.5 rounded text-text-muted hover:text-text hover:bg-surface-overlay transition-colors cursor-pointer" title="Open in Finder"><FolderOpen size={13} /></button>
+                    <button onClick={() => onCopyTo(activeSkill)} className="p-1.5 rounded text-text-muted hover:text-cyan hover:bg-cyan/10 transition-colors cursor-pointer" title="Copy to clients"><Copy size={13} /></button>
+                    <button onClick={() => onDelete(activeSkill)} className="p-1.5 rounded text-text-muted hover:text-red-400 hover:bg-red-400/10 transition-colors cursor-pointer" title="Delete"><Trash2 size={13} /></button>
+                  </div>
+                </div>
+                {/* Raw / Preview toggle + content */}
+                <ContentPanel
+                  content={activeSkill.raw_content}
+                  onSave={(updated) => onSaveSkill(activeSkill, updated)}
+                  onDirtyChange={(dirty) => { isPanelDirty.current = dirty; }}
+                />
+              </>
+            ) : (
+              <div className="flex-1 flex items-center justify-center">
+                <p className="text-xs text-text-muted">Select a skill to view its content</p>
+              </div>
+            )}
+          </div>
         </div>
       )}
       {confirmBulkDelete && (
@@ -508,6 +1058,7 @@ function DiscoverTab({
   const [installingSource, setInstallingSource] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [topPicks, setTopPicks] = useState<SkillSearchResult[]>([]);
+  const [viewMode, setViewMode] = useState<"card" | "list">("card");
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const searchRequestIdRef = useRef(0);
   const searchCacheRef = useRef<Map<string, SkillSearchResult[]>>(new Map());
@@ -681,7 +1232,8 @@ function DiscoverTab({
 
   return (
     <div>
-      <div className="relative mb-5">
+      <div className="relative mb-5 flex items-center gap-2">
+        <div className="relative flex-1">
         <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-text-muted pointer-events-none" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
           <circle cx="11" cy="11" r="8" /><path d="m21 21-4.35-4.35" strokeLinecap="round" />
         </svg>
@@ -705,7 +1257,7 @@ function DiscoverTab({
                   setError(null);
                   setSearching(false);
                 }}
-                className="absolute right-3 top-1/2 -translate-y-1/2 p-0.5 text-text-muted hover:text-text transition-colors"
+                className="absolute right-3 top-1/2 -translate-y-1/2 p-0.5 text-text-muted hover:text-text transition-colors cursor-pointer"
                 title="Clear search"
               >
                 <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -756,6 +1308,23 @@ function DiscoverTab({
           placeholder="Search skills registry (e.g. react, git, debug)…"
           className="w-full pl-9 pr-8 py-2 text-xs bg-surface border border-border rounded-lg text-text placeholder:text-text-muted/50 focus:outline-none focus:border-primary/40"
         />
+        </div>
+        <div className="flex items-center rounded-lg border border-border overflow-hidden flex-shrink-0">
+          <button
+            onClick={() => setViewMode("card")}
+            className={cn("p-1.5 transition-colors cursor-pointer", viewMode === "card" ? "bg-primary/10 text-primary" : "text-text-muted hover:text-text")}
+            title="Card view"
+          >
+            <LayoutGrid size={13} />
+          </button>
+          <button
+            onClick={() => setViewMode("list")}
+            className={cn("p-1.5 transition-colors cursor-pointer", viewMode === "list" ? "bg-primary/10 text-primary" : "text-text-muted hover:text-text")}
+            title="List view"
+          >
+            <List size={13} />
+          </button>
+        </div>
       </div>
 
       {error && <p className="text-[11px] text-red-400 mb-4">{error}</p>}
@@ -769,31 +1338,45 @@ function DiscoverTab({
       )}
 
       {searching && hasActiveQuery ? (
-        <div className="grid grid-cols-3 gap-3">
-          {[0, 1, 2, 3, 4, 5].map((i) => (
-            <div key={i} className="rounded-lg border border-border bg-surface p-4 space-y-3 animate-pulse">
-              <div className="flex items-center gap-2">
-                <div className="w-7 h-7 rounded-md bg-surface-overlay" />
-                <div className="h-3 w-24 rounded bg-surface-overlay" />
+        viewMode === "card" ? (
+          <div className="grid grid-cols-3 gap-3">
+            {[0, 1, 2, 3, 4, 5].map((i) => (
+              <div key={i} className="rounded-lg border border-border bg-surface p-4 space-y-3 animate-pulse">
+                <div className="flex items-center gap-2">
+                  <div className="w-7 h-7 rounded-md bg-surface-overlay" />
+                  <div className="h-3 w-24 rounded bg-surface-overlay" />
+                </div>
+                <div className="h-2 w-full rounded bg-surface-overlay" />
+                <div className="h-8 rounded-md bg-surface-overlay" />
               </div>
-              <div className="h-2 w-full rounded bg-surface-overlay" />
-              <div className="h-8 rounded-md bg-surface-overlay" />
-            </div>
-          ))}
-        </div>
+            ))}
+          </div>
+        ) : (
+          <div className="rounded-xl border border-border overflow-hidden divide-y divide-border/50">
+            {[0, 1, 2, 3, 4].map((i) => (
+              <div key={i} className="bg-surface px-4 py-3 flex items-center gap-4 animate-pulse">
+                <div className="flex-1 space-y-1.5">
+                  <div className="h-2.5 w-32 rounded bg-surface-overlay" />
+                  <div className="h-2 w-64 rounded bg-surface-overlay" />
+                </div>
+                <div className="w-14 h-6 rounded-md bg-surface-overlay flex-shrink-0" />
+              </div>
+            ))}
+          </div>
+        )
       ) : !hasActiveQuery ? (
-        <div className="space-y-5">
-          <div className="flex items-center justify-between">
+        <div className="space-y-3">
+          <div className="flex items-center justify-between mb-1">
             <div>
-              <p className="text-xs font-semibold text-text">Top Picks</p>
-              <p className="text-[10px] text-text-muted/60 mt-0.5">Most installed skills from the registry</p>
+              <p className="text-xs font-semibold text-text">Bundles</p>
+              <p className="text-[10px] text-text-muted/60 mt-0.5">Curated skill collections from trusted sources</p>
             </div>
             <div className="flex flex-wrap gap-1.5">
               {["react", "firebase", "typescript", "python", "git"].map((q) => (
                 <button
                   key={q}
                   onClick={() => setQuery(q)}
-                  className="text-[10px] px-2.5 py-1 rounded-full border border-border text-text-muted hover:border-primary/30 hover:text-primary transition-colors capitalize"
+                  className="text-[10px] px-2.5 py-1 rounded-full border border-border text-text-muted hover:border-primary/30 hover:text-primary transition-colors capitalize cursor-pointer"
                 >
                   {q}
                 </button>
@@ -802,28 +1385,21 @@ function DiscoverTab({
           </div>
 
           {topPicks.length > 0 ? (
-            <div className="grid grid-cols-3 gap-3">
-              {topPicks.map((skill) => (
-                <RegistrySkillCard
-                  key={skill.id}
-                  skill={skill}
-                  installing={installingSource === skill.id}
-                  onInstall={setPendingInstall}
-                />
-              ))}
-            </div>
+            <BundleList
+              skills={topPicks}
+              installingSource={installingSource}
+              onInstall={setPendingInstall}
+              viewMode={viewMode}
+            />
           ) : (
-            <div className="grid grid-cols-3 gap-3">
-              {[0, 1, 2, 3, 4, 5].map((i) => (
-                <div key={i} className="rounded-lg border border-border bg-surface p-4 space-y-3 animate-pulse">
+            <div className="space-y-2">
+              {[0, 1, 2].map((i) => (
+                <div key={i} className="rounded-lg border border-border bg-surface p-4 animate-pulse">
                   <div className="flex items-center gap-2">
-                    <div className="w-7 h-7 rounded-md bg-surface-overlay" />
-                    <div className="flex-1 space-y-1.5">
-                      <div className="h-2.5 rounded bg-surface-overlay w-3/4" />
-                      <div className="h-2 rounded bg-surface-overlay w-1/2" />
-                    </div>
+                    <div className="w-3 h-3 rounded bg-surface-overlay" />
+                    <div className="h-3 w-32 rounded bg-surface-overlay" />
+                    <div className="ml-auto h-2.5 w-16 rounded bg-surface-overlay" />
                   </div>
-                  <div className="h-8 rounded-md bg-surface-overlay" />
                 </div>
               ))}
             </div>
@@ -838,9 +1414,17 @@ function DiscoverTab({
           <p className="text-[11px] text-text-muted/50">Try a different search term</p>
         </div>
       ) : (
-        <div key={normalizedQuery} className="grid grid-cols-3 gap-3">
-          {renderedResultCards}
-        </div>
+        viewMode === "card" ? (
+          <div key={normalizedQuery} className="grid grid-cols-3 gap-3">
+            {renderedResultCards}
+          </div>
+        ) : (
+          <div key={normalizedQuery} className="rounded-xl border border-border overflow-hidden divide-y divide-border/50">
+            {results.map((s) => (
+              <RegistrySkillListRow key={s.id} skill={s} installing={installingSource === s.id} onInstall={setPendingInstall} />
+            ))}
+          </div>
+        )
       )}
 
       {pendingInstall && (
@@ -851,6 +1435,147 @@ function DiscoverTab({
           onInstall={handleInstallConfirm}
         />
       )}
+    </div>
+  );
+}
+
+function BundleList({
+  skills,
+  installingSource,
+  onInstall,
+  viewMode,
+}: {
+  skills: SkillSearchResult[];
+  installingSource: string | null;
+  onInstall: (skill: SkillSearchResult) => void;
+  viewMode: "card" | "list";
+}) {
+  const grouped = useMemo(() => {
+    const map = new Map<string, SkillSearchResult[]>();
+    for (const skill of skills) {
+      const src = skill.source ?? "unknown";
+      if (!map.has(src)) map.set(src, []);
+      map.get(src)!.push(skill);
+    }
+    return Array.from(map.entries());
+  }, [skills]);
+
+  const [openBundles, setOpenBundles] = useState<Set<string>>(
+    () => new Set(grouped.length > 0 ? [grouped[0][0]] : [])
+  );
+
+  type VersionCheck = { installed_version: string | null; remote_version: string | null; has_update: boolean };
+  const [versionChecks, setVersionChecks] = useState<Map<string, VersionCheck>>(new Map());
+
+  useEffect(() => {
+    grouped.forEach(([source]) => {
+      invoke<VersionCheck>("check_bundle_version", { source })
+        .then((result) => setVersionChecks((prev) => new Map(prev).set(source, result)))
+        .catch(() => {});
+    });
+  }, [grouped.length]);
+
+  const toggle = (src: string) => {
+    setOpenBundles((prev) => {
+      const next = new Set(prev);
+      if (next.has(src)) next.delete(src);
+      else next.add(src);
+      return next;
+    });
+  };
+
+  return (
+    <div className="space-y-3">
+      {grouped.map(([source, bundleSkills]) => {
+        const isOpen = openBundles.has(source);
+        const slashIdx = source.indexOf("/");
+        const org = slashIdx !== -1 ? source.slice(0, slashIdx) : "";
+        const repo = slashIdx !== -1 ? source.slice(slashIdx + 1) : source;
+        const displayName = repo.replace(/-/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+        const avatarLetter = repo[0]?.toUpperCase() ?? "S";
+        const versionCheck = versionChecks.get(source);
+
+        return (
+          <div key={source} className="rounded-xl border border-border overflow-hidden">
+            {/* Bundle header */}
+            <div className="flex items-center gap-3 px-4 py-3.5 bg-surface hover:bg-surface-overlay transition-colors">
+              <button
+                onClick={() => toggle(source)}
+                className="flex items-center gap-3 flex-1 min-w-0 text-left cursor-pointer"
+              >
+                <div className="flex-shrink-0 w-8 h-8 rounded-lg bg-primary/15 border border-primary/20 flex items-center justify-center">
+                  <span className="text-xs font-bold text-primary">{avatarLetter}</span>
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2">
+                    <p className="text-xs font-semibold text-text">{displayName}</p>
+                    {versionCheck?.remote_version && (
+                      <span className="text-[9px] font-mono text-text-muted/40">v{versionCheck.remote_version}</span>
+                    )}
+                    {versionCheck?.has_update && (
+                      <span className="text-[9px] font-medium px-1.5 py-0.5 rounded-full bg-cyan/10 border border-cyan/30 text-cyan">update</span>
+                    )}
+                  </div>
+                  {org && <p className="text-[10px] text-text-muted/50 mt-0.5">{source}</p>}
+                </div>
+              </button>
+              <span className="flex-shrink-0 text-[10px] font-medium px-2 py-0.5 rounded-full bg-surface-overlay border border-border text-text-muted">
+                {bundleSkills.length} skills
+              </span>
+              <button
+                onClick={() => onInstall({ id: source, name: "", source })}
+                className="flex-shrink-0 text-[11px] font-medium px-3 py-1 rounded-md border border-primary/30 bg-primary/10 text-primary hover:bg-primary/15 hover:border-primary/50 transition-colors cursor-pointer"
+              >
+                Install All
+              </button>
+              <ChevronRight
+                size={13}
+                onClick={() => toggle(source)}
+                className={cn("text-text-muted transition-transform flex-shrink-0 cursor-pointer", isOpen && "rotate-90")}
+              />
+            </div>
+
+            {/* Skills rows */}
+            {isOpen && (
+              viewMode === "card" ? (
+                <div className="border-t border-border p-3 grid grid-cols-3 gap-3">
+                  {bundleSkills.map((s) => (
+                    <RegistrySkillCard
+                      key={s.id}
+                      skill={s}
+                      installing={installingSource === s.id}
+                      onInstall={onInstall}
+                    />
+                  ))}
+                </div>
+              ) : (
+                <div className="border-t border-border divide-y divide-border/40">
+                  {bundleSkills.map((s) => (
+                    <div
+                      key={s.id}
+                      className="flex items-center gap-4 px-4 py-3 bg-surface hover:bg-surface-overlay transition-colors"
+                    >
+                      <div className="flex-1 min-w-0">
+                        <p className="text-xs font-semibold text-text">{s.name}</p>
+                        {s.description && (
+                          <p className="text-[11px] text-text-muted/60 truncate mt-0.5">{s.description}</p>
+                        )}
+                      </div>
+                      <button
+                        onClick={() => onInstall(s)}
+                        disabled={installingSource === s.id}
+                        className="flex-shrink-0 text-[11px] font-medium px-3 py-1 rounded-md border border-border text-text-muted hover:border-primary/40 hover:text-primary hover:bg-primary/5 disabled:opacity-50 disabled:cursor-not-allowed transition-colors cursor-pointer"
+                      >
+                        {installingSource === s.id ? "Installing…" : "Install"}
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )
+            )}
+          </div>
+        );
+      })}
     </div>
   );
 }
@@ -866,8 +1591,8 @@ function DeleteConfirmDialog({ skill, onConfirm, onCancel }: {
           <p className="text-xs text-text-muted mt-1">"<span className="text-text">{skill.name}</span>" will be permanently removed from disk.</p>
         </div>
         <div className="flex justify-end gap-2">
-          <button onClick={onCancel} className="text-xs px-4 py-2 rounded-lg border border-border text-text-muted hover:text-text transition-colors">Cancel</button>
-          <button onClick={onConfirm} className="text-xs font-medium px-4 py-2 rounded-lg bg-red-500/10 border border-red-500/30 text-red-400 hover:bg-red-500/15 transition-colors">Delete</button>
+          <button onClick={onCancel} className="text-xs px-4 py-2 rounded-lg border border-border text-text-muted hover:text-text transition-colors cursor-pointer">Cancel</button>
+          <button onClick={onConfirm} className="text-xs font-medium px-4 py-2 rounded-lg bg-red-500/10 border border-red-500/30 text-red-400 hover:bg-red-500/15 transition-colors cursor-pointer">Delete</button>
         </div>
       </div>
     </div>

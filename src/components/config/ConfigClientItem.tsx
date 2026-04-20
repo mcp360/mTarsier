@@ -1,5 +1,6 @@
 import { useState } from "react";
 import type { ClientMeta } from "../../types/client";
+import { ClientLogo } from "../skills/ClientLogo";
 
 interface Props {
   client: ClientMeta;
@@ -27,6 +28,7 @@ function ConfigClientItem({ client, isSelected, installed, subtitle, onSelect }:
           : "hover:bg-surface-hover border border-transparent"
       }`}
     >
+      <ClientLogo clientId={client.id} clientName={client.name} size={18} />
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2">
           <span className="text-sm font-medium truncate">{client.name}</span>
