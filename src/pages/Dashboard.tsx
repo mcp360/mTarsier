@@ -90,11 +90,6 @@ function Dashboard() {
     [installedClients],
   );
 
-  const configuredClients = useMemo(
-    () => clients.filter((c) => c.configExists).length,
-    [clients],
-  );
-
   const recentChanges = useMemo(() => {
     const weekAgo = Date.now() - 7 * 24 * 60 * 60 * 1000;
     return entries.filter((e) => new Date(e.timestamp).getTime() > weekAgo).length;
