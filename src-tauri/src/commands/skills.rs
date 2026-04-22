@@ -739,7 +739,7 @@ pub fn skills_install_via_npx(
         .stdout(std::process::Stdio::null())
         .stderr(std::process::Stdio::null())
         .status();
-    if npx_check.is_err() || !npx_check.unwrap().success() {
+    if npx_check.map_or(true, |s| !s.success()) {
         return Err("npx not found — Node.js is required to install for this client".to_string());
     }
 
@@ -784,12 +784,22 @@ pub async fn skills_install(
         // Collect all paths that need file-copy (non-npx clients + custom paths).
         let mut file_copy_paths = target_paths;
 
-        // Try npx for known clients; on failure, fall back to file-copy for those clients.
-        if !npx_agent_ids.is_empty() {
+        // Bundle sources (owner/repo with a single slash) contain multiple skills and are not
+        // handled correctly by `npx skills add` — it treats the repo name as a single skill
+        // name rather than a collection. Always use file-copy for bundles so all skills are
+        // downloaded and distributed correctly.
+        let is_bundle = source.matches('/').count() == 1;
+
+        // Try npx for known clients (single-skill sources only); on failure, fall back to
+        // file-copy for those clients.
+        if !npx_agent_ids.is_empty() && !is_bundle {
             if let Err(_) = skills_install_via_npx(&source, &npx_agent_ids, requested_name.as_deref()) {
                 // npx failed — add their skillsPaths to file-copy queue
                 file_copy_paths.extend(npx_fallback_paths);
             }
+        } else if !npx_agent_ids.is_empty() && is_bundle {
+            // Bundle install: always use file-copy for npx clients too
+            file_copy_paths.extend(npx_fallback_paths);
         }
 
         if file_copy_paths.is_empty() && npx_agent_ids.is_empty() {
@@ -804,6 +814,51 @@ pub async fn skills_install(
     })
         .await
         .map_err(|e| format!("Installation task failed: {e}"))?
+}
+
+#[tauri::command]
+/// Run `npx skills update` globally for all provided agent IDs.
+/// Returns a summary string on success, or an error message.
+pub async fn skills_update_all(npx_agent_ids: Vec<String>) -> Result<String, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        // Validate agent IDs
+        let valid_ids: Vec<String> = npx_agent_ids
+            .into_iter()
+            .filter(|id| id.chars().all(|c| c.is_ascii_alphanumeric() || c == '-'))
+            .collect();
+
+        if valid_ids.is_empty() {
+            return Err("No valid agent IDs provided".to_string());
+        }
+
+        // Check npx is available
+        let npx_check = std::process::Command::new("npx")
+            .arg("--version")
+            .stdout(std::process::Stdio::null())
+            .stderr(std::process::Stdio::null())
+            .status();
+        if npx_check.map_or(true, |s| !s.success()) {
+            return Err("npx not found — Node.js is required to update skills".to_string());
+        }
+
+        let mut cmd = std::process::Command::new("npx");
+        cmd.arg("skills").arg("update");
+        for id in &valid_ids {
+            cmd.arg("--agent").arg(id);
+        }
+        cmd.arg("--yes");
+
+        let output = cmd.output().map_err(|e| format!("Failed to run npx skills update: {e}"))?;
+
+        if output.status.success() {
+            Ok(format!("Skills updated for {} agent{}", valid_ids.len(), if valid_ids.len() != 1 { "s" } else { "" }))
+        } else {
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            Err(format!("npx skills update failed: {}", stderr.trim()))
+        }
+    })
+    .await
+    .map_err(|e| format!("Update task failed: {e}"))?
 }
 
 // Helper function to recursively copy directories

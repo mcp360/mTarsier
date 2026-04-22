@@ -4,11 +4,13 @@ import { invoke } from "@tauri-apps/api/core";
 export type StatusBarStyle = "A" | "B" | "C" | "none";
 
 const STORAGE_KEY = "mtarsier-settings";
+const SKILLS_LAST_UPDATE_KEY = "mtarsier-skills-last-update";
 
 interface StoredSettings {
   statusBarStyle: StatusBarStyle;
   auditLogsEnabled: boolean;
   autoUpdate: boolean;
+  autoUpdateSkills: boolean;
 }
 
 function load(): StoredSettings {
@@ -20,16 +22,33 @@ function load(): StoredSettings {
         statusBarStyle: parsed.statusBarStyle || "C",
         auditLogsEnabled: parsed.auditLogsEnabled !== undefined ? parsed.auditLogsEnabled : true,
         autoUpdate: parsed.autoUpdate !== undefined ? parsed.autoUpdate : true,
+        autoUpdateSkills: parsed.autoUpdateSkills !== undefined ? parsed.autoUpdateSkills : true,
       };
     }
   } catch {}
-  return { statusBarStyle: "C", auditLogsEnabled: true, autoUpdate: true };
+  return { statusBarStyle: "C", auditLogsEnabled: true, autoUpdate: true, autoUpdateSkills: true };
+}
+
+export function getLastSkillsUpdateAt(): number | null {
+  try {
+    const val = localStorage.getItem(SKILLS_LAST_UPDATE_KEY);
+    return val ? parseInt(val, 10) : null;
+  } catch {
+    return null;
+  }
+}
+
+export function setLastSkillsUpdateAt(ts: number) {
+  try {
+    localStorage.setItem(SKILLS_LAST_UPDATE_KEY, String(ts));
+  } catch {}
 }
 
 interface SettingsStore extends StoredSettings {
   setStatusBarStyle: (style: StatusBarStyle) => void;
   setAuditLogsEnabled: (enabled: boolean) => void;
   setAutoUpdate: (enabled: boolean) => void;
+  setAutoUpdateSkills: (enabled: boolean) => void;
 }
 
 const initial = load();
@@ -56,5 +75,11 @@ export const useSettingsStore = create<SettingsStore>((set, get) => ({
     const state = { ...get(), autoUpdate };
     localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
     set({ autoUpdate });
+  },
+
+  setAutoUpdateSkills: (autoUpdateSkills) => {
+    const state = { ...get(), autoUpdateSkills };
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+    set({ autoUpdateSkills });
   },
 }));

@@ -53,6 +53,7 @@ pub fn run() {
       commands::skills::skills_search,
       commands::skills::skills_install,
       commands::skills::get_featured_skills,
+      commands::skills::skills_update_all,
       commands::flow::export_flow,
       commands::flow::import_flow,
     ])
