@@ -17,6 +17,7 @@ import InstallSkillDialog from "../components/skills/InstallSkillDialog";
 import SkillCard from "../components/skills/SkillCard";
 import ViewSkillDialog from "../components/skills/ViewSkillDialog";
 import CopySkillDialog from "../components/skills/CopySkillDialog";
+import { ClientLogo } from "../components/skills/ClientLogo";
 import type { SkillSearchResult } from "../components/skills/RegistrySkillCard";
 import type { InstalledSkill } from "../store/skillStore";
 
@@ -657,12 +658,13 @@ function SkillsDiscoverSection({ showToast }: { showToast: (msg: string) => void
               key={c.id}
               onClick={() => setSelectedClientId(c.id)}
               className={cn(
-                "text-xs px-2.5 py-1 rounded-full border transition-colors",
+                "text-xs px-2.5 py-1 rounded-full border transition-colors flex items-center gap-1.5",
                 selectedClientId === c.id
                   ? "bg-primary/10 text-primary border-primary/30"
                   : "text-text-muted border-border hover:border-border-hover hover:text-text"
               )}
             >
+              <ClientLogo clientId={c.id} clientName={c.name} size={14} />
               {c.name}
             </button>
           ))}

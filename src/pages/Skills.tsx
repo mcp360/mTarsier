@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useMemo } from "react";
 import { invoke } from "@tauri-apps/api/core";
-import { LayoutGrid, List, Eye, Copy, FolderOpen, Trash2, ChevronRight, Star } from "lucide-react";
+import { LayoutGrid, List, Eye, Copy, FolderOpen, Trash2, ChevronRight, Star, Clipboard } from "lucide-react";
 import { cn } from "../lib/utils";
 import { useSkillStore, getSkillableClients } from "../store/skillStore";
 import { useClientStore } from "../store/clientStore";
@@ -339,6 +339,7 @@ function ContentPanel({ content, onSave, onDirtyChange }: {
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
   const textareaRef = React.useRef<HTMLTextAreaElement>(null);
   const isDirty = edited !== baseline;
 
@@ -412,6 +413,18 @@ function ContentPanel({ content, onSave, onDirtyChange }: {
               {saving ? "Saving…" : saved ? "Saved!" : "Save"}
             </button>
           )}
+          <button
+            onClick={() => {
+              navigator.clipboard.writeText(edited).then(() => {
+                setCopied(true);
+                setTimeout(() => setCopied(false), 1500);
+              }).catch(() => {});
+            }}
+            className={cn("p-1.5 rounded transition-colors cursor-pointer", copied ? "text-primary" : "text-text-muted hover:text-text hover:bg-surface-overlay")}
+            title="Copy content"
+          >
+            <Clipboard size={13} />
+          </button>
         </div>
       </div>
       <div className="flex-1 overflow-hidden">

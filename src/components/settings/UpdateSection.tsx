@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { getVersion } from "@tauri-apps/api/app";
-import { useSettingsStore } from "../../store/settingsStore";
+import { useSettingsStore, getLastSkillsUpdateAt } from "../../store/settingsStore";
 
 interface UpdateInfo {
   version: string;
@@ -10,15 +10,25 @@ interface UpdateInfo {
 
 type UpdateState = "idle" | "checking" | "up-to-date" | "available" | "installing";
 
+function formatRelativeTime(ts: number): string {
+  const diff = Date.now() - ts;
+  const days = Math.floor(diff / (1000 * 60 * 60 * 24));
+  if (days === 0) return "today";
+  if (days === 1) return "yesterday";
+  return `${days} days ago`;
+}
+
 export function UpdateSection() {
-  const { autoUpdate, setAutoUpdate } = useSettingsStore();
+  const { autoUpdate, setAutoUpdate, autoUpdateSkills, setAutoUpdateSkills } = useSettingsStore();
   const [currentVersion, setCurrentVersion] = useState<string>("");
   const [state, setState] = useState<UpdateState>("idle");
   const [updateInfo, setUpdateInfo] = useState<UpdateInfo | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [lastSkillsUpdate, setLastSkillsUpdate] = useState<number | null>(null);
 
   useEffect(() => {
     getVersion().then(setCurrentVersion).catch(() => {});
+    setLastSkillsUpdate(getLastSkillsUpdateAt());
   }, []);
 
   useEffect(() => {
@@ -82,7 +92,7 @@ export function UpdateSection() {
         {/* Auto-update toggle */}
         <div className="flex items-center justify-between">
           <div>
-            <p className="text-sm font-medium text-text">Auto Update</p>
+            <p className="text-sm font-medium text-text">Auto Update App</p>
             <p className="text-xs text-text-muted">Automatically check and install updates on launch.</p>
           </div>
           <button
@@ -95,6 +105,34 @@ export function UpdateSection() {
             <span
               className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
                 autoUpdate ? "translate-x-6" : "translate-x-1"
+              }`}
+            />
+          </button>
+        </div>
+
+        <div className="border-t border-border" />
+
+        {/* Auto-update skills toggle */}
+        <div className="flex items-center justify-between">
+          <div>
+            <p className="text-sm font-medium text-text">Auto Update Skills</p>
+            <p className="text-xs text-text-muted">
+              Run <span className="font-mono">npx skills update</span> weekly to keep all skills current.
+              {lastSkillsUpdate && (
+                <span className="ml-1 text-text-muted/60">Last updated {formatRelativeTime(lastSkillsUpdate)}.</span>
+              )}
+            </p>
+          </div>
+          <button
+            onClick={() => setAutoUpdateSkills(!autoUpdateSkills)}
+            className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+              autoUpdateSkills ? "bg-primary" : "bg-text-muted/30"
+            }`}
+          >
+            <span className="sr-only">Toggle auto update skills</span>
+            <span
+              className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                autoUpdateSkills ? "translate-x-6" : "translate-x-1"
               }`}
             />
           </button>

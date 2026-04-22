@@ -1,5 +1,6 @@
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { onOpenUrl, getCurrent } from "@tauri-apps/plugin-deep-link";
 import AppLayout from "./layouts/AppLayout";
@@ -13,6 +14,9 @@ import Settings from "./pages/Settings";
 import About from "./pages/About";
 import DeepLinkHandler from "./components/deeplink/DeepLinkHandler";
 import { parseDeepLink, useDeepLinkStore } from "./store/deepLinkStore";
+import { useSettingsStore, getLastSkillsUpdateAt, setLastSkillsUpdateAt } from "./store/settingsStore";
+import { getSkillableClients } from "./store/skillStore";
+import { useClientStore } from "./store/clientStore";
 
 function DeepLinkListener() {
   const setPending = useDeepLinkStore((s) => s.setPending);
@@ -53,11 +57,43 @@ function DeepLinkListener() {
   return null;
 }
 
+const SEVEN_DAYS_MS = 7 * 24 * 60 * 60 * 1000;
+
+function SkillsAutoUpdater() {
+  const { autoUpdateSkills } = useSettingsStore();
+  const { clients } = useClientStore();
+  const hasRun = useRef(false);
+
+  useEffect(() => {
+    if (!autoUpdateSkills) return;
+    if (hasRun.current) return;
+    const last = getLastSkillsUpdateAt();
+    if (last && Date.now() - last < SEVEN_DAYS_MS) return;
+
+    const skillableClients = getSkillableClients(
+      clients.filter((c) => c.installed).map((c) => c.meta)
+    );
+    const agentIds = skillableClients
+      .map((c) => c.npxAgentId)
+      .filter((id): id is string => !!id);
+
+    if (agentIds.length === 0) return;
+
+    hasRun.current = true;
+    invoke("skills_update_all", { npxAgentIds: agentIds })
+      .then(() => setLastSkillsUpdateAt(Date.now()))
+      .catch(() => { hasRun.current = false; });
+  }, [autoUpdateSkills, clients]);
+
+  return null;
+}
+
 function App() {
   return (
     <BrowserRouter>
       <DeepLinkListener />
       <DeepLinkHandler />
+      <SkillsAutoUpdater />
       <Routes>
         <Route element={<AppLayout />}>
           <Route path="/" element={<Dashboard />} />
