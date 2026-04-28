@@ -1,3 +1,5 @@
+[![MseeP.ai Security Assessment Badge](https://mseep.net/pr/mcp360-mtarsier-badge.png)](https://mseep.ai/app/mcp360-mtarsier)
+
 # mTarsier
 
 [![mTarsier — MCP & Skills Management, without the chaos.](https://raw.githubusercontent.com/mcp360/mTarsier/main/src/assets/mtarsier-readme-banner.svg)](https://mcp360.ai/mtarsier)
